@@ -101,11 +101,11 @@ function runSandbox(binaryPath, input, timeLimitMs, memoryLimitKb) {
     const localCmd = binaryPath;
     const localArgs = [];
 
-    // Let's decide whether to run docker or local first.
-    let cmd = dockerCmd;
-    let args = dockerArgs;
+    // If the host is Windows, we run natively because a Linux Docker container cannot execute a Windows PE (.exe) binary.
+    let cmd = isWindows ? localCmd : dockerCmd;
+    let args = isWindows ? localArgs : dockerArgs;
 
-    let isFallback = false;
+    let isFallback = isWindows;
 
     const executeProcess = (runCmd, runArgs) => {
       const child = spawn(runCmd, runArgs);
@@ -232,7 +232,7 @@ export async function judgeSubmission(submissionId, sourceCode, problemId, timeL
 
     // 3. Fetch test cases from database
     const testCasesRes = await db.query(
-      "SELECT id, input, expected_output, is_hidden FROM testcases WHERE problem_id = $1 ORDER BY id ASC",
+      "SELECT id, input, expected_output, is_hidden FROM test_cases WHERE problem_id = $1 ORDER BY id ASC",
       [problemId]
     );
     const testCases = testCasesRes.rows;
