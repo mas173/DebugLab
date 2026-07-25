@@ -56,7 +56,6 @@ build/
 .cache/
 
 # Database dumps
-*.sql
 *.sqlite
 *.db
 
