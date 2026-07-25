@@ -232,7 +232,7 @@ export async function judgeSubmission(submissionId, sourceCode, problemId, timeL
 
     // 3. Fetch test cases from database
     const testCasesRes = await db.query(
-      "SELECT id, input, expected_output, is_hidden FROM testcases WHERE problem_id = $1 ORDER BY id ASC",
+      "SELECT id, input, expected_output, is_hidden FROM test_cases WHERE problem_id = $1 ORDER BY id ASC",
       [problemId]
     );
     const testCases = testCasesRes.rows;
