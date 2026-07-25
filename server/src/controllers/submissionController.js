@@ -75,7 +75,7 @@ async function processQueue() {
           } else {
             // No next problem, user finished the contest
             await db.query(
-              'UPDATE participant_status SET current_problem_id = NULL WHERE participant_id = $2',
+              'UPDATE participant_status SET current_problem_id = NULL WHERE participant_id = $1',
               [participantId]
             );
             console.log(`[Unlock] Participant ${participantId} finished all contest problems!`);

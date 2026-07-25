@@ -101,11 +101,11 @@ function runSandbox(binaryPath, input, timeLimitMs, memoryLimitKb) {
     const localCmd = binaryPath;
     const localArgs = [];
 
-    // Let's decide whether to run docker or local first.
-    let cmd = dockerCmd;
-    let args = dockerArgs;
+    // If the host is Windows, we run natively because a Linux Docker container cannot execute a Windows PE (.exe) binary.
+    let cmd = isWindows ? localCmd : dockerCmd;
+    let args = isWindows ? localArgs : dockerArgs;
 
-    let isFallback = false;
+    let isFallback = isWindows;
 
     const executeProcess = (runCmd, runArgs) => {
       const child = spawn(runCmd, runArgs);
