@@ -57,6 +57,26 @@ export async function login(req, res) {
 }
 
 export async function logout(req, res) {
+  if (req.user && req.user.role === 'participant') {
+    try {
+      await db.query(
+        "UPDATE participant_status SET is_online = FALSE, last_active_at = CURRENT_TIMESTAMP WHERE participant_id = $1",
+        [req.user.id]
+      );
+      
+      const io = req.app.get('io');
+      if (io) {
+        io.to('admin_room').emit('participant_status_changed', {
+          id: req.user.id,
+          username: req.user.username,
+          is_online: false
+        });
+      }
+    } catch (err) {
+      console.error('Error setting offline during logout:', err);
+    }
+  }
+
   res.clearCookie('token');
   return res.json({ message: 'Logout successful.' });
 }

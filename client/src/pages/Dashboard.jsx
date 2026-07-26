@@ -431,40 +431,44 @@ export default function Dashboard() {
 
   // Active Workspace
   return (
-    <div className="flex min-h-screen flex-col bg-black text-white overflow-hidden">
+    <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 text-slate-200 overflow-hidden relative">
+      {/* Dynamic Background Accents */}
+      <div className="absolute top-0 right-1/4 h-[300px] w-[300px] rounded-full bg-cyan-500/5 blur-[100px] pointer-events-none"></div>
+      <div className="absolute bottom-0 left-1/4 h-[300px] w-[300px] rounded-full bg-blue-500/5 blur-[100px] pointer-events-none"></div>
+
       {/* Top Navbar */}
-      <header className="flex justify-between items-center px-8 h-16 border-b border-slate-900 bg-slate-950/40 shrink-0">
+      <header className="flex justify-between items-center px-8 h-16 border-b border-white/[0.05] bg-slate-900/40 backdrop-blur-md shrink-0 shadow-[0_4px_30px_rgba(0,0,0,0.3)] z-10">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+          <h1 className="text-xl font-black bg-gradient-to-r from-white via-slate-100 to-cyan-400 bg-clip-text text-transparent">
             DebugLab Workspace
           </h1>
-          <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 uppercase">
+          <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 uppercase tracking-wider">
             Active
           </span>
         </div>
 
         {/* Timer */}
-        <div className="flex items-center gap-3 rounded-lg border border-slate-900 bg-slate-950/80 px-4 py-1.5">
+        <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-2 shadow-inner">
           <Clock size={14} className="text-cyan-400 animate-pulse" />
-          <span className="font-mono text-sm font-bold tracking-wider text-white">
+          <span className="font-mono text-sm font-black tracking-wider text-white">
             {formatTime(timeRemaining)}
           </span>
         </div>
 
         <div className="flex items-center gap-4">
-          <span className={`text-xs font-mono px-2 py-0.5 rounded ${saveStatus === 'Saved' ? 'text-slate-500 bg-slate-950/60' :
-            saveStatus === 'Saving...' ? 'text-cyan-400 bg-cyan-950/20' :
-              'text-red-400 bg-red-950/20'
+          <span className={`text-[10px] font-bold font-mono px-2.5 py-1 rounded-lg uppercase tracking-wider ${saveStatus === 'Saved' ? 'text-slate-400 bg-white/[0.03] border border-white/[0.05]' :
+            saveStatus === 'Saving...' ? 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/20' :
+              'text-red-400 bg-red-500/10 border border-red-500/20'
             }`}>
             {saveStatus}
           </span>
           <div className="text-right">
-            <p className="text-xs font-semibold text-slate-300">{user?.username}</p>
-            <p className="text-[10px] text-cyan-500 font-mono">Participant</p>
+            <p className="text-xs font-bold text-slate-300">{user?.username}</p>
+            <p className="text-[9px] uppercase tracking-wider text-cyan-400 font-bold font-mono">Participant</p>
           </div>
           <button
             onClick={logout}
-            className="flex items-center gap-1.5 rounded bg-slate-950 border border-slate-900 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-900 transition hover:text-white"
+            className="flex items-center gap-1.5 rounded-lg bg-white/[0.03] border border-white/[0.08] px-3.5 py-2 text-xs text-slate-300 hover:bg-white/[0.08] hover:text-white transition duration-300"
           >
             <LogOut size={12} />
             Sign Out
@@ -475,11 +479,11 @@ export default function Dashboard() {
       {/* Main Split Layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT COLUMN: Problems List & Statements */}
-        <aside className="w-1/3 border-r border-slate-900 bg-slate-950/40 flex flex-col overflow-hidden shrink-0">
+        <aside className="w-1/3 border-r border-white/[0.05] bg-slate-900/10 backdrop-blur-md flex flex-col overflow-hidden shrink-0">
           {/* Progress Banner */}
-          <div className="p-4 border-b border-slate-900 bg-slate-950/20">
-            <h4 className="text-xs uppercase font-bold tracking-wider text-cyan-400 mb-2">Unlocking Progress</h4>
-            <div className="flex gap-1">
+          <div className="p-4 border-b border-white/[0.05] bg-white/[0.01]">
+            <h4 className="text-[10px] uppercase font-bold tracking-wider text-cyan-400 mb-2.5 font-mono">Unlocking Progress</h4>
+            <div className="flex gap-1.5">
               {problems.map((p) => {
                 const isCurrent = p.id === currentProblemId;
                 const isSolved = p.order_index < (problems.find(pr => pr.id === currentProblemId)?.order_index || 0);
@@ -487,12 +491,12 @@ export default function Dashboard() {
                   <button
                     key={p.id}
                     onClick={() => handleProblemSelect(p)}
-                    className={`flex-1 text-center py-2 text-xs font-bold font-mono rounded border transition ${selectedProblem?.id === p.id
-                      ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400'
+                    className={`flex-1 text-center py-2.5 text-xs font-black font-mono rounded-lg border transition-all duration-300 ${selectedProblem?.id === p.id
+                      ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] scale-[1.03]'
                       : isSolved
                         ? 'bg-emerald-950/20 border-emerald-900/60 text-emerald-400'
                         : isCurrent
-                          ? 'bg-slate-900 border-slate-800 text-slate-300'
+                          ? 'bg-slate-800/80 border-slate-700 text-slate-200'
                           : 'bg-black/40 border-transparent text-slate-600'
                       }`}
                   >
@@ -504,11 +508,11 @@ export default function Dashboard() {
           </div>
 
           {/* Tab Bar */}
-          <div className="flex border-b border-slate-900 bg-slate-950/20 shrink-0">
+          <div className="flex border-b border-white/[0.05] bg-white/[0.01] shrink-0">
             <button
               onClick={() => setLeftTab('description')}
-              className={`flex-1 text-center py-2.5 text-xs font-semibold border-b-2 transition ${leftTab === 'description'
-                ? 'border-cyan-500 text-cyan-400 font-bold bg-slate-900/10'
+              className={`flex-1 text-center py-3.5 text-xs uppercase tracking-wider font-bold border-b-2 transition duration-300 ${leftTab === 'description'
+                ? 'border-cyan-500 text-cyan-400 bg-cyan-500/[0.02]'
                 : 'border-transparent text-slate-500 hover:text-slate-300'
                 }`}
             >
@@ -516,48 +520,48 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setLeftTab('history')}
-              className={`flex-1 text-center py-2.5 text-xs font-semibold border-b-2 transition ${leftTab === 'history'
-                ? 'border-cyan-500 text-cyan-400 font-bold bg-slate-900/10'
+              className={`flex-1 text-center py-3.5 text-xs uppercase tracking-wider font-bold border-b-2 transition duration-300 ${leftTab === 'history'
+                ? 'border-cyan-500 text-cyan-400 bg-cyan-500/[0.02]'
                 : 'border-transparent text-slate-500 hover:text-slate-300'
                 }`}
             >
-              My Attempts ({historySubmissions.length})
+              Attempts ({historySubmissions.length})
             </button>
             <button
               onClick={() => {
                 setLeftTab('leaderboard');
                 fetchLeaderboard();
               }}
-              className={`flex-1 text-center py-2.5 text-xs font-semibold border-b-2 transition ${leftTab === 'leaderboard'
-                ? 'border-cyan-500 text-cyan-400 font-bold bg-slate-900/10'
+              className={`flex-1 text-center py-3.5 text-xs uppercase tracking-wider font-bold border-b-2 transition duration-300 ${leftTab === 'leaderboard'
+                ? 'border-cyan-500 text-cyan-400 bg-cyan-500/[0.02]'
                 : 'border-transparent text-slate-500 hover:text-slate-300'
                 }`}
             >
-              Leaderboard
+              Standings
             </button>
           </div>
 
           {/* Problem Statement, Submission History or Leaderboard */}
           {selectedProblem ? (
             leftTab === 'description' ? (
-              <div className="flex-1 p-6 overflow-y-auto space-y-4">
-                <div className="flex justify-between items-start">
+              <div className="flex-1 p-6 overflow-y-auto space-y-5 select-text">
+                <div className="flex justify-between items-start gap-4">
                   <div>
-                    <span className="text-[10px] uppercase font-bold tracking-widest text-cyan-400 font-mono">Problem {selectedProblem.order_index}</span>
-                    <h2 className="text-xl font-bold text-white mt-0.5">{selectedProblem.title}</h2>
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-cyan-500 font-mono">Problem {selectedProblem.order_index}</span>
+                    <h2 className="text-xl font-black text-white mt-1 leading-tight">{selectedProblem.title}</h2>
                   </div>
-                  <span className="text-xs font-semibold px-2.5 py-1 bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 rounded-lg">
-                    {selectedProblem.points} pts
+                  <span className="text-xs font-bold px-3 py-1.5 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 rounded-xl shrink-0 shadow-[0_0_15px_rgba(6,182,212,0.1)]">
+                    {selectedProblem.points} PTS
                   </span>
                 </div>
 
-                <div className="flex gap-4 text-[10px] font-mono text-slate-500 border-y border-slate-900 py-2.5">
-                  <span>Time Limit: {selectedProblem.time_limit_ms}ms</span>
-                  <span>Memory Limit: {selectedProblem.memory_limit_kb}KB</span>
+                <div className="flex gap-4 text-[11px] font-mono text-slate-400 border-y border-white/[0.05] py-3">
+                  <span>TIME LIMIT: {selectedProblem.time_limit_ms}ms</span>
+                  <span>MEMORY LIMIT: {selectedProblem.memory_limit_kb}KB</span>
                 </div>
 
                 {/* Description Body */}
-                <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-line space-y-2">
+                <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-line space-y-3 font-sans">
                   {selectedProblem.description}
                 </div>
               </div>
@@ -666,19 +670,19 @@ export default function Dashboard() {
         </aside>
 
         {/* RIGHT COLUMN: Code Editor & Console */}
-        <section className="flex-1 flex flex-col overflow-hidden bg-slate-950" onKeyDown={handleKeyDown}>
+        <section className="flex-1 flex flex-col overflow-hidden bg-slate-900/10" onKeyDown={handleKeyDown}>
           {/* Editor Header */}
-          <div className="h-10 border-b border-slate-900 px-6 flex justify-between items-center bg-slate-950/80 shrink-0">
-            <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
+          <div className="h-10 border-b border-white/[0.05] px-6 flex justify-between items-center bg-slate-900/30 backdrop-blur-md shrink-0">
+            <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
               <Code2 size={14} className="text-cyan-400" />
               solution.c
             </span>
-            <span className="text-[10px] text-slate-600 font-mono">Language: C (GCC)</span>
+            <span className="text-[10px] text-slate-500 font-mono tracking-wider">C (GCC)</span>
           </div>
 
           {/* Monaco Editor Container */}
           <div
-            className="flex-1 relative bg-black"
+            className="flex-1 relative bg-black/40"
             onCopy={handleInterceptClipboard}
             onCut={handleInterceptClipboard}
             onPaste={handleInterceptClipboard}
@@ -705,15 +709,15 @@ export default function Dashboard() {
                 cursorBlinking: 'smooth',
                 formatOnPaste: false,
                 autoClosingBrackets: 'always',
-                readOnly: false // Will toggle based on completion status in later phases
+                readOnly: false
               }}
             />
           </div>
 
           {/* CONSOLE / TERMINAL PANEL */}
-          <div className="h-64 border-t border-slate-900 bg-black flex flex-col overflow-hidden shrink-0">
-            <div className="h-10 border-b border-slate-900 px-6 flex justify-between items-center bg-slate-950/80 shrink-0">
-              <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
+          <div className="h-64 border-t border-white/[0.05] bg-slate-950/80 flex flex-col overflow-hidden shrink-0">
+            <div className="h-11 border-b border-white/[0.05] px-6 flex justify-between items-center bg-slate-900/30 backdrop-blur-md shrink-0">
+              <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                 <Terminal size={14} className="text-cyan-400" />
                 Execution Console
               </span>
@@ -722,7 +726,7 @@ export default function Dashboard() {
                 <button
                   onClick={handleCodeSubmit}
                   disabled={isSubmitting || !selectedProblem}
-                  className="flex items-center gap-1.5 rounded bg-cyan-600 px-3 py-1 text-xs font-semibold text-white hover:bg-cyan-500 transition disabled:opacity-40"
+                  className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] px-4 py-1.5 text-xs font-bold text-white hover:scale-[1.01] transition duration-300 disabled:opacity-40 disabled:pointer-events-none"
                 >
                   <Send size={12} />
                   Submit Code
@@ -730,7 +734,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="flex-1 p-4 font-mono text-xs text-slate-400 overflow-y-auto leading-relaxed whitespace-pre-wrap select-text">
+            <div className="flex-1 p-4 font-mono text-xs text-slate-300 overflow-y-auto leading-relaxed whitespace-pre-wrap select-text bg-black/20">
               {consoleLogs}
             </div>
           </div>

@@ -574,26 +574,30 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="flex h-screen bg-black text-slate-100 overflow-hidden font-sans">
+    <div className="flex h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 text-slate-200 overflow-hidden font-sans relative">
+      {/* Premium Ambient Light Leaks */}
+      <div className="absolute top-1/4 left-1/4 h-[400px] w-[400px] rounded-full bg-indigo-500/5 blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-1/4 right-1/4 h-[400px] w-[400px] rounded-full bg-purple-500/5 blur-[120px] pointer-events-none"></div>
+
       {/* SIDEBAR NAVIGATION */}
-      <aside className="w-64 border-r border-slate-900 bg-slate-950/60 p-6 flex flex-col justify-between shrink-0">
+      <aside className="w-64 border-r border-white/[0.05] bg-slate-900/15 backdrop-blur-md p-6 flex flex-col justify-between shrink-0 z-10 shadow-[4px_0_30px_rgba(0,0,0,0.3)]">
         <div>
           <div className="flex items-center gap-3 mb-8">
-            <div className="h-9 w-9 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+            <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-indigo-500/15 to-purple-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.15)]">
               <Settings size={20} />
             </div>
             <div>
-              <h2 className="font-bold tracking-tight text-white">DebugLab Console</h2>
-              <span className="text-[10px] uppercase tracking-widest text-cyan-500 font-mono">Orchestration</span>
+              <h2 className="font-extrabold tracking-tight text-white">DebugLab</h2>
+              <span className="text-[9px] uppercase tracking-widest text-indigo-400 font-black font-mono">Console</span>
             </div>
           </div>
 
           <nav className="space-y-1.5">
             <button
               onClick={() => setActiveTab('controls')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition ${activeTab === 'controls'
-                  ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400'
-                  : 'text-slate-400 hover:bg-slate-900 hover:text-white border border-transparent'
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition duration-300 border ${activeTab === 'controls'
+                  ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                  : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
                 }`}
             >
               <Clock size={16} />
@@ -601,9 +605,9 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setActiveTab('problems')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition ${activeTab === 'problems'
-                  ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400'
-                  : 'text-slate-400 hover:bg-slate-900 hover:text-white border border-transparent'
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition duration-300 border ${activeTab === 'problems'
+                  ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                  : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
                 }`}
             >
               <FileText size={16} />
@@ -611,9 +615,9 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setActiveTab('participants')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition ${activeTab === 'participants'
-                  ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400'
-                  : 'text-slate-400 hover:bg-slate-900 hover:text-white border border-transparent'
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition duration-300 border ${activeTab === 'participants'
+                  ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                  : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
                 }`}
             >
               <Users size={16} />
@@ -621,9 +625,9 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setActiveTab('leaderboard')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition ${activeTab === 'leaderboard'
-                  ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400'
-                  : 'text-slate-400 hover:bg-slate-900 hover:text-white border border-transparent'
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition duration-300 border ${activeTab === 'leaderboard'
+                  ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                  : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
                 }`}
             >
               <Award size={16} />
@@ -632,19 +636,19 @@ export default function Dashboard() {
           </nav>
         </div>
 
-        <div className="border-t border-slate-900 pt-4">
+        <div className="border-t border-white/[0.05] pt-4">
           <div className="flex items-center gap-3 mb-4">
-            <div className="h-8 w-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-300 uppercase">
+            <div className="h-8 w-8 rounded-full bg-slate-800 border border-white/[0.08] flex items-center justify-center text-xs font-bold text-slate-300 uppercase">
               {user?.username?.[0] || 'A'}
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-300">{user?.username}</p>
-              <p className="text-[10px] text-slate-500">Administrator</p>
+              <p className="text-xs font-bold text-slate-300">{user?.username}</p>
+              <p className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">Orchestrator</p>
             </div>
           </div>
           <button
             onClick={logout}
-            className="w-full flex items-center gap-2 justify-center px-4 py-2 rounded-lg bg-slate-950 border border-slate-900 text-xs text-slate-400 hover:bg-slate-900 hover:text-white transition"
+            className="w-full flex items-center gap-2 justify-center px-4 py-2.5 rounded-xl bg-white/[0.02] border border-white/[0.08] text-xs text-slate-400 hover:bg-white/[0.06] hover:text-white transition duration-300"
           >
             <LogOut size={14} />
             Sign Out
@@ -653,15 +657,15 @@ export default function Dashboard() {
       </aside>
 
       {/* MAIN CONTAINER */}
-      <main className="flex-1 flex flex-col min-w-0 bg-slate-950/20 overflow-y-auto">
-        <header className="h-16 border-b border-slate-900 px-8 flex justify-between items-center shrink-0">
+      <main className="flex-1 flex flex-col min-w-0 bg-slate-900/5 overflow-y-auto z-10">
+        <header className="h-16 border-b border-white/[0.05] px-8 flex justify-between items-center bg-slate-900/40 backdrop-blur-md shrink-0 shadow-[0_4px_30px_rgba(0,0,0,0.3)]">
           <div className="flex items-center gap-4">
-            <span className="text-xs text-slate-500">Selected Contest:</span>
+            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider font-mono">Selected Contest:</span>
             {selectedContest ? (
               <select
                 value={selectedContest.id}
                 onChange={(e) => setSelectedContest(contests.find(c => c.id === e.target.value))}
-                className="bg-black border border-slate-900 text-white rounded px-3 py-1.5 text-sm focus:outline-none focus:border-cyan-500"
+                className="bg-slate-950 border border-white/[0.08] text-white rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/80 transition-all duration-300 font-sans"
               >
                 {contests.map(c => (
                   <option key={c.id} value={c.id}>{c.title}</option>
@@ -677,7 +681,7 @@ export default function Dashboard() {
                 setContestDuration(60);
                 setShowCreateContest(true);
               }}
-              className="text-xs text-cyan-400 hover:underline flex items-center gap-1"
+              className="text-xs text-cyan-400 hover:underline flex items-center gap-1 font-bold"
             >
               <Plus size={12} /> New
             </button>
@@ -690,13 +694,13 @@ export default function Dashboard() {
                     setContestDuration(selectedContest.duration_minutes || 60);
                     setShowEditContest(true);
                   }}
-                  className="text-xs text-slate-400 hover:underline flex items-center gap-1"
+                  className="text-xs text-slate-400 hover:underline flex items-center gap-1 font-bold"
                 >
                   <Edit2 size={12} /> Rename
                 </button>
                 <button
                   onClick={() => handleDeleteContest(selectedContest.id)}
-                  className="text-xs text-red-500/80 hover:underline flex items-center gap-1"
+                  className="text-xs text-red-500/80 hover:underline flex items-center gap-1 font-bold"
                 >
                   <Trash2 size={12} /> Delete
                 </button>
@@ -706,11 +710,11 @@ export default function Dashboard() {
 
           {selectedContest && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500">Status:</span>
-              <span className={`px-2 py-0.5 text-xs font-bold rounded uppercase tracking-wider ${selectedContest.status === 'active' ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' :
-                  selectedContest.status === 'paused' ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400' :
-                    selectedContest.status === 'ended' ? 'bg-red-500/10 border border-red-500/30 text-red-400' :
-                      'bg-slate-800 text-slate-400'
+              <span className="text-xs text-slate-400 font-bold uppercase tracking-wider font-mono">Status:</span>
+              <span className={`px-2.5 py-0.5 text-[10px] font-black rounded-lg uppercase tracking-wider border ${selectedContest.status === 'active' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
+                  selectedContest.status === 'paused' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' :
+                    selectedContest.status === 'ended' ? 'bg-red-500/10 border-red-500/30 text-red-400' :
+                      'bg-slate-800 border-slate-700 text-slate-400'
                 }`}>
                 {selectedContest.status}
               </span>
@@ -724,23 +728,23 @@ export default function Dashboard() {
             <div className="space-y-6 max-w-4xl">
               {/* Overview Stats Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="rounded-xl border border-slate-900 bg-slate-950/60 p-4 flex flex-col">
-                  <span className="text-[10px] uppercase tracking-wider font-mono text-slate-500">Total Registered</span>
-                  <span className="text-2xl font-extrabold text-white mt-1">{stats.totalParticipants}</span>
-                  <span className="text-[10px] text-slate-600 mt-0.5">Participants on roster</span>
+                <div className="rounded-xl border border-white/[0.05] bg-slate-900/20 p-5 flex flex-col hover:bg-slate-900/30 hover:scale-[1.01] transition-all duration-300 shadow-lg">
+                  <span className="text-[10px] uppercase tracking-wider font-mono text-slate-400 font-bold">Total Registered</span>
+                  <span className="text-3xl font-black text-white mt-1.5">{stats.totalParticipants}</span>
+                  <span className="text-[10px] text-slate-500 mt-1">Participants on roster</span>
                 </div>
-                <div className="rounded-xl border border-slate-900 bg-slate-950/60 p-4 flex flex-col">
-                  <span className="text-[10px] uppercase tracking-wider font-mono text-slate-500">Active Online</span>
-                  <span className="text-2xl font-extrabold text-emerald-400 mt-1 flex items-center gap-1.5">
+                <div className="rounded-xl border border-white/[0.05] bg-slate-900/20 p-5 flex flex-col hover:bg-slate-900/30 hover:scale-[1.01] transition-all duration-300 shadow-lg">
+                  <span className="text-[10px] uppercase tracking-wider font-mono text-slate-400 font-bold">Active Online</span>
+                  <span className="text-3xl font-black text-emerald-400 mt-1.5 flex items-center gap-2">
                     {stats.onlineParticipants}
                     <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                   </span>
-                  <span className="text-[10px] text-slate-600 mt-0.5">Sockets connected now</span>
+                  <span className="text-[10px] text-slate-500 mt-1">Sockets connected now</span>
                 </div>
-                <div className="rounded-xl border border-slate-900 bg-slate-950/60 p-4 flex flex-col">
-                  <span className="text-[10px] uppercase tracking-wider font-mono text-slate-500">Submissions Made</span>
-                  <span className="text-2xl font-extrabold text-cyan-400 mt-1">{stats.totalSubmissions}</span>
-                  <span className="text-[10px] text-slate-600 mt-0.5">Evaluated by judge sandbox</span>
+                <div className="rounded-xl border border-white/[0.05] bg-slate-900/20 p-5 flex flex-col hover:bg-slate-900/30 hover:scale-[1.01] transition-all duration-300 shadow-lg">
+                  <span className="text-[10px] uppercase tracking-wider font-mono text-slate-400 font-bold">Submissions Made</span>
+                  <span className="text-3xl font-black text-cyan-400 mt-1.5">{stats.totalSubmissions}</span>
+                  <span className="text-[10px] text-slate-500 mt-1">Evaluated by judge sandbox</span>
                 </div>
               </div>
 

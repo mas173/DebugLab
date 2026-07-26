@@ -288,6 +288,30 @@ export async function getContestProblemsParticipant(req, res) {
       }
     }
 
+    // Verify if current_problem_id belongs to the active contest
+    if (currentProblemId) {
+      const verifyContest = await db.query(
+        "SELECT contest_id FROM problems WHERE id = $1",
+        [currentProblemId]
+      );
+      if (verifyContest.rows.length === 0 || verifyContest.rows[0].contest_id !== contestId) {
+        // Reset to the first problem of the active contest
+        const firstProblemResult = await db.query(
+          'SELECT id FROM problems WHERE contest_id = $1 ORDER BY order_index ASC LIMIT 1',
+          [contestId]
+        );
+        if (firstProblemResult.rows.length > 0) {
+          currentProblemId = firstProblemResult.rows[0].id;
+          await db.query(
+            'UPDATE participant_status SET current_problem_id = $1 WHERE participant_id = $2',
+            [currentProblemId, participantId]
+          );
+        } else {
+          currentProblemId = null;
+        }
+      }
+    }
+
     // 3. Fetch ALL problems for the active contest
     const problemsResult = await db.query(
       `SELECT id, title, description, starter_code, order_index, time_limit_ms, memory_limit_kb, points

@@ -157,26 +157,32 @@ io.on('connection', async (socket) => {
     // Mark participant offline in database
     if (socket.user && socket.user.role === 'participant') {
       const userId = socket.user.id;
+      let shouldMarkOffline = false;
+
       if (activeConnections.has(userId)) {
         activeConnections.get(userId).delete(socket.id);
-
-        // Only update DB and broadcast offline if no more tabs exist for this user
         if (activeConnections.get(userId).size === 0) {
           activeConnections.delete(userId);
-          try {
-            await db.query(
-              "UPDATE participant_status SET is_online = FALSE, last_active_at = CURRENT_TIMESTAMP WHERE participant_id = $1",
-              [userId]
-            );
-            // Broadcast offline status change to admin room
-            io.to('admin_room').emit('participant_status_changed', {
-              id: userId,
-              username: socket.user.username,
-              is_online: false
-            });
-          } catch (err) {
-            console.error('Error marking participant offline:', err);
-          }
+          shouldMarkOffline = true;
+        }
+      } else {
+        shouldMarkOffline = true;
+      }
+
+      if (shouldMarkOffline) {
+        try {
+          await db.query(
+            "UPDATE participant_status SET is_online = FALSE, last_active_at = CURRENT_TIMESTAMP WHERE participant_id = $1",
+            [userId]
+          );
+          // Broadcast offline status change to admin room
+          io.to('admin_room').emit('participant_status_changed', {
+            id: userId,
+            username: socket.user.username,
+            is_online: false
+          });
+        } catch (err) {
+          console.error('Error marking participant offline:', err);
         }
       }
     }
