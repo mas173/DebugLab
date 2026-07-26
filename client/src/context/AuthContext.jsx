@@ -11,8 +11,12 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Check auth status on mount
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
+
     async function checkAuth() {
       try {
         const res = await axios.get('/api/auth/me');
@@ -21,6 +25,8 @@ export function AuthProvider({ children }) {
         }
       } catch (err) {
         setUser(null);
+        localStorage.removeItem('token');
+        delete axios.defaults.headers.common['Authorization'];
       } finally {
         setLoading(false);
       }

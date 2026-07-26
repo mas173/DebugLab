@@ -12,7 +12,7 @@ const loginLimiter = rateLimit({
 const router = Router();
 
 router.post('/login', loginLimiter, login);
-router.post('/logout', logout);
+router.post('/logout', authenticate, logout);
 router.get('/me', authenticate, getMe);
 
 export default router;
