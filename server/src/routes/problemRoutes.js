@@ -13,6 +13,7 @@ import {
   uploadTestCaseFiles,
   saveDraft,
   getDraft,
+  runCodeHandler,
 } from '../controllers/problemController.js';
 import { authenticate, requireAdmin } from '../middleware/authMiddleware.js';
 
@@ -58,5 +59,8 @@ router.post(
   ]),
   uploadTestCaseFiles
 );
+
+// Admin: run code to verify / generate expected output
+router.post('/admin/run-code', requireAdmin, runCodeHandler);
 
 export default router;
