@@ -24,6 +24,8 @@ export function AuthProvider({ children }) {
         }
       } catch (err) {
         setUser(null);
+        localStorage.removeItem('token');
+        delete axios.defaults.headers.common['Authorization'];
       } finally {
         setLoading(false);
       }

@@ -19,6 +19,7 @@ export default function Dashboard() {
   const [contests, setContests] = useState([]);
   const [selectedContest, setSelectedContest] = useState(null);
   const [showCreateContest, setShowCreateContest] = useState(false);
+  const [showEditContest, setShowEditContest] = useState(false);
   const [contestTitle, setContestTitle] = useState('');
   const [contestDesc, setContestDesc] = useState('');
   const [contestDuration, setContestDuration] = useState(60);
@@ -266,6 +267,45 @@ export default function Dashboard() {
       toast.success('Contest created successfully.');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to create contest.');
+    }
+  };
+
+  // Edit/Rename Contest
+  const handleUpdateContest = async (e) => {
+    e.preventDefault();
+    if (!selectedContest) return;
+    try {
+      const res = await axios.put(`/api/contests/${selectedContest.id}`, {
+        title: contestTitle,
+        description: contestDesc,
+        duration_minutes: contestDuration
+      });
+      setContests(prev => prev.map(c => c.id === res.data.contest.id ? res.data.contest : c));
+      setSelectedContest(res.data.contest);
+      setShowEditContest(false);
+      setContestTitle('');
+      setContestDesc('');
+      toast.success('Contest updated successfully.');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update contest.');
+    }
+  };
+
+  // Delete Contest
+  const handleDeleteContest = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this contest? All problems and submissions will be permanently removed.')) {
+      return;
+    }
+    try {
+      await axios.delete(`/api/contests/${id}`);
+      setContests(prev => prev.filter(c => c.id !== id));
+      if (selectedContest?.id === id) {
+        const remaining = contests.filter(c => c.id !== id);
+        setSelectedContest(remaining.length > 0 ? remaining[0] : null);
+      }
+      toast.success('Contest deleted successfully.');
+    } catch (err) {
+      toast.error('Failed to delete contest.');
     }
   };
 
@@ -631,11 +671,37 @@ export default function Dashboard() {
               <span className="text-sm font-semibold text-slate-400">None</span>
             )}
             <button
-              onClick={() => setShowCreateContest(true)}
+              onClick={() => {
+                setContestTitle('');
+                setContestDesc('');
+                setContestDuration(60);
+                setShowCreateContest(true);
+              }}
               className="text-xs text-cyan-400 hover:underline flex items-center gap-1"
             >
-              <Plus size={12} /> New Contest
+              <Plus size={12} /> New
             </button>
+            {selectedContest && (
+              <>
+                <button
+                  onClick={() => {
+                    setContestTitle(selectedContest.title);
+                    setContestDesc(selectedContest.description || '');
+                    setContestDuration(selectedContest.duration_minutes || 60);
+                    setShowEditContest(true);
+                  }}
+                  className="text-xs text-slate-400 hover:underline flex items-center gap-1"
+                >
+                  <Edit2 size={12} /> Rename
+                </button>
+                <button
+                  onClick={() => handleDeleteContest(selectedContest.id)}
+                  className="text-xs text-red-500/80 hover:underline flex items-center gap-1"
+                >
+                  <Trash2 size={12} /> Delete
+                </button>
+              </>
+            )}
           </div>
 
           {selectedContest && (
@@ -1413,6 +1479,72 @@ export default function Dashboard() {
                   className="px-4 py-2 rounded bg-cyan-600 hover:bg-cyan-500 text-sm font-semibold flex items-center gap-1.5"
                 >
                   <CheckCircle2 size={16} /> Create Contest
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT CONTEST DIALOG MODAL */}
+      {showEditContest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-900 bg-slate-950 p-6 shadow-[0_0_50px_rgba(6,182,212,0.08)]">
+            <div className="flex justify-between items-center mb-6 border-b border-slate-900 pb-3">
+              <h3 className="text-lg font-bold text-cyan-400">Rename / Edit Contest</h3>
+              <button onClick={() => setShowEditContest(false)} className="text-slate-400 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateContest} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold uppercase">Contest Title</label>
+                <input
+                  type="text"
+                  value={contestTitle}
+                  onChange={(e) => setContestTitle(e.target.value)}
+                  placeholder="e.g. ACM Debugging Fall 2026"
+                  className="w-full rounded border border-slate-900 bg-black py-2 px-3 text-sm focus:outline-none focus:border-cyan-500"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold uppercase">Description</label>
+                <textarea
+                  value={contestDesc}
+                  onChange={(e) => setContestDesc(e.target.value)}
+                  placeholder="Enter details about rules and guidelines..."
+                  rows={3}
+                  className="w-full rounded border border-slate-900 bg-black py-2 px-3 text-sm focus:outline-none focus:border-cyan-500 font-sans"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold uppercase">Duration (Minutes)</label>
+                <input
+                  type="number"
+                  value={contestDuration}
+                  onChange={(e) => setContestDuration(parseInt(e.target.value, 10))}
+                  className="w-full rounded border border-slate-900 bg-black py-2 px-3 text-sm focus:outline-none focus:border-cyan-500"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditContest(false)}
+                  className="px-4 py-2 border border-slate-900 rounded bg-slate-950 text-sm text-slate-400 hover:bg-slate-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded bg-cyan-600 hover:bg-cyan-500 text-sm font-semibold flex items-center gap-1.5"
+                >
+                  <CheckCircle2 size={16} /> Save Changes
                 </button>
               </div>
             </form>

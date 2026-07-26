@@ -107,25 +107,37 @@ io.use((socket, next) => {
   }
 });
 
+// Track active connections per participant to avoid multi-tab race conditions
+const activeConnections = new Map(); // userId -> Set of socketIds
+
 // Real-Time Socket Connection Handling
 io.on('connection', async (socket) => {
   console.log(`Socket connected: ${socket.id} (Authenticated: ${!!socket.user})`);
 
   // Mark participant online in database
   if (socket.user && socket.user.role === 'participant') {
-    try {
-      await db.query(
-        "UPDATE participant_status SET is_online = TRUE, last_active_at = CURRENT_TIMESTAMP WHERE participant_id = $1",
-        [socket.user.id]
-      );
-      // Broadcast online status change to admin room
-      io.to('admin_room').emit('participant_status_changed', {
-        id: socket.user.id,
-        username: socket.user.username,
-        is_online: true
-      });
-    } catch (err) {
-      console.error('Error marking participant online:', err);
+    const userId = socket.user.id;
+    if (!activeConnections.has(userId)) {
+      activeConnections.set(userId, new Set());
+    }
+    activeConnections.get(userId).add(socket.id);
+
+    // Only update DB and broadcast ONCE (when the first tab connects)
+    if (activeConnections.get(userId).size === 1) {
+      try {
+        await db.query(
+          "UPDATE participant_status SET is_online = TRUE, last_active_at = CURRENT_TIMESTAMP WHERE participant_id = $1",
+          [userId]
+        );
+        // Broadcast online status change to admin room
+        io.to('admin_room').emit('participant_status_changed', {
+          id: userId,
+          username: socket.user.username,
+          is_online: true
+        });
+      } catch (err) {
+        console.error('Error marking participant online:', err);
+      }
     }
   }
 
@@ -144,19 +156,28 @@ io.on('connection', async (socket) => {
 
     // Mark participant offline in database
     if (socket.user && socket.user.role === 'participant') {
-      try {
-        await db.query(
-          "UPDATE participant_status SET is_online = FALSE, last_active_at = CURRENT_TIMESTAMP WHERE participant_id = $1",
-          [socket.user.id]
-        );
-        // Broadcast offline status change to admin room
-        io.to('admin_room').emit('participant_status_changed', {
-          id: socket.user.id,
-          username: socket.user.username,
-          is_online: false
-        });
-      } catch (err) {
-        console.error('Error marking participant offline:', err);
+      const userId = socket.user.id;
+      if (activeConnections.has(userId)) {
+        activeConnections.get(userId).delete(socket.id);
+
+        // Only update DB and broadcast offline if no more tabs exist for this user
+        if (activeConnections.get(userId).size === 0) {
+          activeConnections.delete(userId);
+          try {
+            await db.query(
+              "UPDATE participant_status SET is_online = FALSE, last_active_at = CURRENT_TIMESTAMP WHERE participant_id = $1",
+              [userId]
+            );
+            // Broadcast offline status change to admin room
+            io.to('admin_room').emit('participant_status_changed', {
+              id: userId,
+              username: socket.user.username,
+              is_online: false
+            });
+          } catch (err) {
+            console.error('Error marking participant offline:', err);
+          }
+        }
       }
     }
   });

@@ -185,11 +185,20 @@ function runSandbox(binaryPath, input, timeLimitMs, memoryLimitKb) {
         });
       });
 
-      // Write test case inputs to child process stdin
-      if (input) {
-        child.stdin.write(input);
+      // Catch EPIPE/stream errors on child stdin to prevent crashing the main server process
+      if (child.stdin) {
+        child.stdin.on('error', (err) => {
+          console.warn('Child stdin write error (caught to prevent crash):', err.message);
+        });
+
+        // Write test case inputs to child process stdin safely
+        if (input && child.stdin.writable) {
+          child.stdin.write(input);
+        }
+        if (child.stdin.writable) {
+          child.stdin.end();
+        }
       }
-      child.stdin.end();
     };
 
     executeProcess(cmd, args);

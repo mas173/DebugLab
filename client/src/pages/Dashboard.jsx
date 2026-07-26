@@ -496,7 +496,7 @@ export default function Dashboard() {
                           : 'bg-black/40 border-transparent text-slate-600'
                       }`}
                   >
-                    #{p.order_index}
+                    P{p.order_index}
                   </button>
                 );
               })}
@@ -508,8 +508,8 @@ export default function Dashboard() {
             <button
               onClick={() => setLeftTab('description')}
               className={`flex-1 text-center py-2.5 text-xs font-semibold border-b-2 transition ${leftTab === 'description'
-                  ? 'border-cyan-500 text-cyan-400 font-bold bg-slate-900/10'
-                  : 'border-transparent text-slate-500 hover:text-slate-300'
+                ? 'border-cyan-500 text-cyan-400 font-bold bg-slate-900/10'
+                : 'border-transparent text-slate-500 hover:text-slate-300'
                 }`}
             >
               Description
@@ -517,8 +517,8 @@ export default function Dashboard() {
             <button
               onClick={() => setLeftTab('history')}
               className={`flex-1 text-center py-2.5 text-xs font-semibold border-b-2 transition ${leftTab === 'history'
-                  ? 'border-cyan-500 text-cyan-400 font-bold bg-slate-900/10'
-                  : 'border-transparent text-slate-500 hover:text-slate-300'
+                ? 'border-cyan-500 text-cyan-400 font-bold bg-slate-900/10'
+                : 'border-transparent text-slate-500 hover:text-slate-300'
                 }`}
             >
               My Attempts ({historySubmissions.length})
@@ -529,8 +529,8 @@ export default function Dashboard() {
                 fetchLeaderboard();
               }}
               className={`flex-1 text-center py-2.5 text-xs font-semibold border-b-2 transition ${leftTab === 'leaderboard'
-                  ? 'border-cyan-500 text-cyan-400 font-bold bg-slate-900/10'
-                  : 'border-transparent text-slate-500 hover:text-slate-300'
+                ? 'border-cyan-500 text-cyan-400 font-bold bg-slate-900/10'
+                : 'border-transparent text-slate-500 hover:text-slate-300'
                 }`}
             >
               Leaderboard
@@ -576,8 +576,8 @@ export default function Dashboard() {
                           <div>
                             <div className="flex items-center gap-2 mb-1">
                               <span className={`font-mono text-[9px] font-bold px-1.5 py-0.5 rounded ${isAcc ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                  isCTE ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                                    'bg-red-500/10 text-red-400 border border-red-500/20'
+                                isCTE ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                  'bg-red-500/10 text-red-400 border border-red-500/20'
                                 }`}>
                                 {sub.status.toUpperCase().replace(/_/g, ' ')}
                               </span>
@@ -625,8 +625,8 @@ export default function Dashboard() {
                         <div
                           key={lb.participant_id}
                           className={`grid grid-cols-12 items-center py-2.5 px-2 rounded text-xs transition ${isMe
-                              ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400'
-                              : 'border border-transparent bg-slate-950/40 text-slate-300'
+                            ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400'
+                            : 'border border-transparent bg-slate-950/40 text-slate-300'
                             }`}
                         >
                           <span className="col-span-2 font-mono font-bold flex items-center gap-1">
