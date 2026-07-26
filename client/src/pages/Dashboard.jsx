@@ -290,10 +290,14 @@ export default function Dashboard() {
         );
       } else {
         const formattedStatus = status.toUpperCase().replace(/_/g, ' ');
+        const detailLog = sub.compile_error_log
+          ? `- Details: ${sub.compile_error_log}\n`
+          : '';
         toast.error(`Verdict: ${formattedStatus}`);
         setConsoleLogs((prev) =>
           prev + `\n[VERDICT]: ${formattedStatus}\n` +
           `- Test Cases Passed: ${sub.passed_test_cases}/${sub.total_test_cases}\n` +
+          detailLog +
           `- Execution Time: ${sub.execution_time_ms || 0} ms\n`
         );
       }

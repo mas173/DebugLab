@@ -200,11 +200,13 @@ function runSandbox(binaryPath, input, timeLimitMs, memoryLimitKb) {
  * Standardize output (strip trailing whitespaces/newlines for comparison)
  */
 function standardize(str) {
-  if (!str) return '';
+  if (str === null || str === undefined) return '';
   return str
+    .toString()
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
     .split('\n')
     .map(line => line.trimEnd())
-    .filter(line => line.length > 0)
     .join('\n')
     .trim();
 }
@@ -265,6 +267,7 @@ export async function judgeSubmission(submissionId, sourceCode, problemId, timeL
       if (run.status === 'runtime_error') {
         return {
           status: 'runtime_error',
+          compileErrorLog: run.error || run.stderr || 'Runtime error.',
           passedCases,
           totalCases: testCases.length,
           timeMs: run.timeMs
@@ -300,12 +303,66 @@ export async function judgeSubmission(submissionId, sourceCode, problemId, timeL
     console.error(`Submission ${submissionId} judge system error:`, err);
     return {
       status: 'runtime_error',
+      compileErrorLog: err.message,
       passedCases: 0,
       totalCases: 0,
       timeMs: 0
     };
   } finally {
     // 5. Cleanup temporary workspace files
+    cleanupFiles(sourcePath, binaryPath);
+  }
+}
+
+/**
+ * Compiles and runs C code against a single input.
+ * Used by admin to verify / auto-generate expected outputs for test cases.
+ */
+export async function runCode(sourceCode, input, timeLimitMs = 2000, memoryLimitKb = 128000) {
+  const uuid = uuidv4();
+  const sourcePath = path.join(TEMP_DIR, `${uuid}.c`);
+  const binaryPath = path.join(TEMP_DIR, process.platform === 'win32' ? `${uuid}.exe` : uuid);
+
+  try {
+    fs.writeFileSync(sourcePath, sourceCode);
+
+    const compilation = await compileSource(sourcePath, binaryPath);
+    if (compilation.error) {
+      return {
+        success: false,
+        status: 'compile_error',
+        output: '',
+        error: compilation.stderr || compilation.stdout || 'Compilation failed.'
+      };
+    }
+
+    const run = await runSandbox(binaryPath, input, timeLimitMs, memoryLimitKb);
+
+    if (run.status === 'success') {
+      return {
+        success: true,
+        status: 'success',
+        output: run.stdout,
+        standardizedOutput: standardize(run.stdout),
+        timeMs: run.timeMs,
+        error: ''
+      };
+    }
+
+    return {
+      success: false,
+      status: run.status,
+      output: run.stdout || '',
+      error: run.stderr || run.error || `Execution failed with status: ${run.status}`
+    };
+  } catch (err) {
+    return {
+      success: false,
+      status: 'error',
+      output: '',
+      error: err.message
+    };
+  } finally {
     cleanupFiles(sourcePath, binaryPath);
   }
 }

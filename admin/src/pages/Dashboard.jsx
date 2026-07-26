@@ -34,6 +34,12 @@ export default function Dashboard() {
   const [probTimeLimit, setProbTimeLimit] = useState(2000);
   const [probMemoryLimit, setProbMemoryLimit] = useState(128000);
   const [probPoints, setProbPoints] = useState(100);
+  const [problemFormTestCases, setProblemFormTestCases] = useState([]);
+  const [problemFormTcInput, setProblemFormTcInput] = useState('');
+  const [problemFormTcOutput, setProblemFormTcOutput] = useState('');
+  const [problemFormTcIsHidden, setProblemFormTcIsHidden] = useState(true);
+  const [isGeneratingOutput, setIsGeneratingOutput] = useState(false);
+  const [isGeneratingOutputTC, setIsGeneratingOutputTC] = useState(false);
 
   // Test Case States
   const [selectedProblemForTC, setSelectedProblemForTC] = useState(null);
@@ -268,6 +274,30 @@ export default function Dashboard() {
     e.preventDefault();
     if (!selectedContest) return;
 
+    const hasPendingTestCase = problemFormTcInput !== '' || problemFormTcOutput !== '';
+    if (!editingProblem && hasPendingTestCase && problemFormTcOutput === '') {
+      toast.error('Expected output is required for the pending test case.');
+      return;
+    }
+
+    const testCasesToCreate = !editingProblem
+      ? [
+          ...problemFormTestCases,
+          ...(hasPendingTestCase
+            ? [{
+                input: problemFormTcInput,
+                expected_output: problemFormTcOutput,
+                is_hidden: problemFormTcIsHidden
+              }]
+            : [])
+        ]
+      : [];
+
+    if (!editingProblem && testCasesToCreate.length === 0) {
+      toast.error('Add at least one test case before saving the problem.');
+      return;
+    }
+
     const payload = {
       contest_id: selectedContest.id,
       title: probTitle,
@@ -286,13 +316,91 @@ export default function Dashboard() {
         toast.success('Problem updated.');
       } else {
         const res = await axios.post('/api/problems/admin', payload);
-        setProblems(prev => [...prev, res.data.problem].sort((a, b) => a.order_index - b.order_index));
-        toast.success('Problem added.');
+        const createdProblem = res.data.problem;
+        let uploadedTestCases = 0;
+        if (testCasesToCreate.length > 0) {
+          try {
+            await axios.post(`/api/problems/admin/${createdProblem.id}/testcases/bulk`, {
+              testCases: testCasesToCreate.map(({ input, expected_output, is_hidden }) => ({
+                input,
+                expected_output,
+                is_hidden
+              }))
+            });
+            uploadedTestCases = testCasesToCreate.length;
+          } catch (testCaseErr) {
+            console.error('Problem created, but test-case upload failed:', testCaseErr);
+            toast.error('Problem added, but test cases failed to upload.');
+          }
+        }
+        setProblems(prev => [...prev, createdProblem].sort((a, b) => a.order_index - b.order_index));
+        if (uploadedTestCases > 0 || testCasesToCreate.length === 0) {
+          toast.success(
+            uploadedTestCases > 0
+              ? `Problem added with ${uploadedTestCases} test case${uploadedTestCases === 1 ? '' : 's'}.`
+              : 'Problem added.'
+          );
+        }
       }
       resetProblemForm();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to save problem.');
     }
+  };
+
+  const handleAddProblemFormTestCase = () => {
+    if (problemFormTcInput.trim() === '' || problemFormTcOutput.trim() === '') {
+      toast.error('Both Stdin input and expected output are required for each test case.');
+      return;
+    }
+
+    setProblemFormTestCases(prev => [
+      ...prev,
+      {
+        tempId: globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+        input: problemFormTcInput.trim(),
+        expected_output: problemFormTcOutput.trim(),
+        is_hidden: problemFormTcIsHidden
+      }
+    ]);
+    setProblemFormTcInput('');
+    setProblemFormTcOutput('');
+    setProblemFormTcIsHidden(true);
+  };
+
+  // Generate expected output by running starter code against the input (problem form)
+  const handleGenerateOutput = async () => {
+    if (!probCode) {
+      toast.error('Enter the starter code first to generate output.');
+      return;
+    }
+    if (problemFormTcInput.trim() === '') {
+      toast.error('Enter a valid Stdin input first before generating output.');
+      return;
+    }
+    setIsGeneratingOutput(true);
+    try {
+      const res = await axios.post('/api/problems/admin/run-code', {
+        sourceCode: probCode,
+        input: problemFormTcInput,
+        timeLimitMs: probTimeLimit,
+        memoryLimitKb: probMemoryLimit
+      });
+      if (res.data.success) {
+        setProblemFormTcOutput(res.data.standardizedOutput || res.data.output.trim());
+        toast.success('Output generated from starter code.');
+      } else {
+        toast.error(`Run failed: ${res.data.error || res.data.status}`);
+      }
+    } catch (err) {
+      toast.error('Failed to run code on server.');
+    } finally {
+      setIsGeneratingOutput(false);
+    }
+  };
+
+  const handleRemoveProblemFormTestCase = (tempId) => {
+    setProblemFormTestCases(prev => prev.filter(tc => tc.tempId !== tempId));
   };
 
   const resetProblemForm = () => {
@@ -305,6 +413,10 @@ export default function Dashboard() {
     setProbTimeLimit(2000);
     setProbMemoryLimit(128000);
     setProbPoints(100);
+    setProblemFormTestCases([]);
+    setProblemFormTcInput('');
+    setProblemFormTcOutput('');
+    setProblemFormTcIsHidden(true);
   };
 
   const handleEditProblem = (prob) => {
@@ -316,6 +428,10 @@ export default function Dashboard() {
     setProbTimeLimit(prob.time_limit_ms);
     setProbMemoryLimit(prob.memory_limit_kb);
     setProbPoints(prob.points);
+    setProblemFormTestCases([]);
+    setProblemFormTcInput('');
+    setProblemFormTcOutput('');
+    setProblemFormTcIsHidden(true);
     setShowProblemForm(true);
   };
 
@@ -344,10 +460,14 @@ export default function Dashboard() {
   const handleAddTestCase = async (e) => {
     e.preventDefault();
     if (!selectedProblemForTC) return;
+    if (tcInput.trim() === '' || tcOutput.trim() === '') {
+      toast.error('Both Stdin input and expected output are required.');
+      return;
+    }
     try {
       const res = await axios.post(`/api/problems/admin/${selectedProblemForTC.id}/testcases`, {
-        input: tcInput,
-        expected_output: tcOutput,
+        input: tcInput.trim(),
+        expected_output: tcOutput.trim(),
         is_hidden: tcIsHidden
       });
       setTestCases(prev => [...prev, res.data.testCase]);
@@ -355,7 +475,35 @@ export default function Dashboard() {
       setTcOutput('');
       toast.success('Testcase added.');
     } catch (err) {
-      toast.error('Failed to add testcase.');
+      toast.error(err.response?.data?.error || 'Failed to add testcase.');
+    }
+  };
+
+  // Generate expected output by running starter code (test case manager)
+  const handleGenerateOutputTC = async () => {
+    if (!selectedProblemForTC) return;
+    if (tcInput.trim() === '') {
+      toast.error('Enter a valid Stdin input first before generating output.');
+      return;
+    }
+    setIsGeneratingOutputTC(true);
+    try {
+      const res = await axios.post('/api/problems/admin/run-code', {
+        sourceCode: selectedProblemForTC.starter_code,
+        input: tcInput,
+        timeLimitMs: selectedProblemForTC.time_limit_ms,
+        memoryLimitKb: selectedProblemForTC.memory_limit_kb
+      });
+      if (res.data.success) {
+        setTcOutput(res.data.standardizedOutput || res.data.output.trim());
+        toast.success('Output generated from starter code.');
+      } else {
+        toast.error(`Run failed: ${res.data.error || res.data.status}`);
+      }
+    } catch (err) {
+      toast.error('Failed to run code on server.');
+    } finally {
+      setIsGeneratingOutputTC(false);
     }
   };
 
@@ -740,6 +888,110 @@ export default function Dashboard() {
                     </div>
                   </div>
 
+                  {!editingProblem && (
+                    <div className="border-t border-slate-900 pt-5 space-y-4">
+                      <div className="flex justify-between items-start gap-4">
+                        <div>
+                          <h5 className="flex items-center gap-1 text-xs font-bold text-cyan-400 uppercase">Initial Test Cases</h5>
+                          <p className="text-[10px] text-slate-500 mt-1">
+                            Add cases now, or manage them later from the test-case panel.
+                          </p>
+                        </div>
+                        <span className="rounded border border-slate-800 bg-black px-2 py-1 text-[10px] font-mono text-slate-400">
+                          {problemFormTestCases.length} queued
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-500 uppercase font-semibold">Stdin Input</label>
+                          <textarea
+                            value={problemFormTcInput}
+                            onChange={(e) => setProblemFormTcInput(e.target.value)}
+                            placeholder="e.g. 5"
+                            rows={3}
+                            className="w-full rounded border border-slate-900 bg-black py-2 px-3 text-xs font-mono focus:outline-none focus:border-cyan-500"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-500 uppercase font-semibold">Expected Stdout</label>
+                          <textarea
+                            value={problemFormTcOutput}
+                            onChange={(e) => setProblemFormTcOutput(e.target.value)}
+                            placeholder="e.g. 120"
+                            rows={3}
+                            className="w-full rounded border border-slate-900 bg-black py-2 px-3 text-xs font-mono focus:outline-none focus:border-cyan-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={problemFormTcIsHidden}
+                            onChange={(e) => setProblemFormTcIsHidden(e.target.checked)}
+                            className="accent-cyan-500 rounded border-slate-900 bg-black"
+                          />
+                          Hidden Test Case
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={handleGenerateOutput}
+                            disabled={isGeneratingOutput}
+                            className="flex items-center gap-1.5 rounded bg-emerald-900/40 border border-emerald-700/40 px-3 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-800/40 transition disabled:opacity-40"
+                          >
+                            <Play size={10} fill="currentColor" />
+                            {isGeneratingOutput ? 'Running...' : 'Generate Output'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleAddProblemFormTestCase}
+                            className="flex items-center gap-1.5 rounded bg-slate-900 border border-slate-800 px-3 py-1.5 text-xs font-semibold text-cyan-400 hover:bg-slate-800 transition"
+                          >
+                            <Plus size={12} /> Add Case
+                          </button>
+                        </div>
+                      </div>
+
+                      {problemFormTestCases.length > 0 && (
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {problemFormTestCases.map((tc, index) => (
+                            <div key={tc.tempId} className="flex justify-between items-center rounded border border-slate-900 bg-black/40 p-2.5 text-xs">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-bold text-[10px] text-slate-500">Case #{index + 1}</span>
+                                  {tc.is_hidden ? (
+                                    <span className="flex items-center gap-0.5 text-[9px] text-amber-500 bg-amber-500/5 border border-amber-500/20 px-1 rounded font-mono">
+                                      <EyeOff size={8} /> Hidden
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-0.5 text-[9px] text-cyan-500 bg-cyan-500/5 border border-cyan-500/20 px-1 rounded font-mono">
+                                      <Eye size={8} /> Public
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-4 font-mono text-[10px] text-slate-400">
+                                  <p className="truncate">In: "{tc.input}"</p>
+                                  <p className="truncate">Out: "{tc.expected_output}"</p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveProblemFormTestCase(tc.tempId)}
+                                className="text-slate-600 hover:text-red-400 p-1 shrink-0"
+                                title="Remove queued test case"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex justify-end gap-2 pt-2">
                     <button
                       type="button"
@@ -850,14 +1102,25 @@ export default function Dashboard() {
                               onChange={(e) => setTcIsHidden(e.target.checked)}
                               className="accent-cyan-500 rounded border-slate-900 bg-black"
                             />
-                            Hidden Test Case (Not shown in participant logs)
+                            Hidden Test Case
                           </label>
-                          <button
-                            type="submit"
-                            className="bg-cyan-600 hover:bg-cyan-500 text-white rounded py-1 px-3 text-xs font-semibold"
-                          >
-                            Add Case
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={handleGenerateOutputTC}
+                              disabled={isGeneratingOutputTC}
+                              className="flex items-center gap-1.5 bg-emerald-900/40 border border-emerald-700/40 text-emerald-400 rounded py-1 px-2.5 text-xs font-semibold hover:bg-emerald-800/40 transition disabled:opacity-40"
+                            >
+                              <Play size={10} fill="currentColor" />
+                              {isGeneratingOutputTC ? 'Running...' : 'Generate Output'}
+                            </button>
+                            <button
+                              type="submit"
+                              className="bg-cyan-600 hover:bg-cyan-500 text-white rounded py-1 px-3 text-xs font-semibold"
+                            >
+                              Add Case
+                            </button>
+                          </div>
                         </div>
                       </form>
 

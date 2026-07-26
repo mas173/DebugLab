@@ -1,4 +1,5 @@
 import * as db from '../db.js';
+import { runCode } from '../services/judgeService.js';
 
 // --- PROBLEMS ADMIN ACTIONS ---
 
@@ -287,24 +288,13 @@ export async function getContestProblemsParticipant(req, res) {
       }
     }
 
-    // 3. Select all problems up to and including the current problem's order_index
-    if (!currentProblemId) {
-      return res.json({ problems: [] });
-    }
-
-    const currentProblemResult = await db.query('SELECT order_index FROM problems WHERE id = $1', [currentProblemId]);
-    if (currentProblemResult.rows.length === 0) {
-      return res.json({ problems: [] });
-    }
-    const maxOrderIndex = currentProblemResult.rows[0].order_index;
-
-    // Fetch unlocked problems. Do NOT select hidden test cases, only problem statement!
+    // 3. Fetch ALL problems for the active contest
     const problemsResult = await db.query(
       `SELECT id, title, description, starter_code, order_index, time_limit_ms, memory_limit_kb, points
        FROM problems 
-       WHERE contest_id = $1 AND order_index <= $2
+       WHERE contest_id = $1
        ORDER BY order_index ASC`,
-      [contestId, maxOrderIndex]
+      [contestId]
     );
 
     return res.json({
@@ -403,5 +393,30 @@ export async function getDraft(req, res) {
   } catch (error) {
     console.error('Error fetching draft:', error);
     return res.status(500).json({ error: 'Internal server error fetching draft.' });
+  }
+}
+
+// --- ADMIN: RUN & VERIFY CODE ---
+
+// Compile and run C code against a single input (Admin only)
+// Used to generate/verify expected outputs for test cases
+export async function runCodeHandler(req, res) {
+  const { sourceCode, input, timeLimitMs, memoryLimitKb } = req.body;
+
+  if (!sourceCode) {
+    return res.status(400).json({ error: 'sourceCode is required.' });
+  }
+
+  try {
+    const result = await runCode(
+      sourceCode,
+      input || '',
+      timeLimitMs || 2000,
+      memoryLimitKb || 128000
+    );
+    return res.json(result);
+  } catch (error) {
+    console.error('Error running code:', error);
+    return res.status(500).json({ error: 'Internal server error running code.' });
   }
 }
