@@ -68,11 +68,13 @@ export default function Dashboard() {
         setCurrentProblemId(problemsRes.data.currentProblemId);
 
         if (loadedProblems.length > 0) {
-          // Select the latest unlocked problem by default
-          const lastUnlocked = loadedProblems[loadedProblems.length - 1];
-          setSelectedProblem(lastUnlocked);
-          loadProblemCode(lastUnlocked.id, lastUnlocked.starter_code);
-          loadSubmissionHistory(lastUnlocked.id);
+          setSelectedProblem((prev) => {
+            const existing = prev ? loadedProblems.find(p => p.id === prev.id) : null;
+            const target = existing || loadedProblems[0];
+            loadProblemCode(target.id, target.starter_code);
+            loadSubmissionHistory(target.id);
+            return target;
+          });
           fetchLeaderboard();
         }
       } else {
@@ -431,11 +433,7 @@ export default function Dashboard() {
 
   // Active Workspace
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 text-slate-200 overflow-hidden relative">
-      {/* Dynamic Background Accents */}
-      <div className="absolute top-0 right-1/4 h-[300px] w-[300px] rounded-full bg-cyan-500/5 blur-[100px] pointer-events-none"></div>
-      <div className="absolute bottom-0 left-1/4 h-[300px] w-[300px] rounded-full bg-blue-500/5 blur-[100px] pointer-events-none"></div>
-
+    <div className="flex h-screen flex-col bg-black text-white overflow-hidden">
       {/* Top Navbar */}
       <header className="flex justify-between items-center px-8 h-16 border-b border-white/[0.05] bg-slate-900/40 backdrop-blur-md shrink-0 shadow-[0_4px_30px_rgba(0,0,0,0.3)] z-10">
         <div className="flex items-center gap-4">
@@ -477,27 +475,22 @@ export default function Dashboard() {
       </header>
 
       {/* Main Split Layout */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* LEFT COLUMN: Problems List & Statements */}
-        <aside className="w-1/3 border-r border-white/[0.05] bg-slate-900/10 backdrop-blur-md flex flex-col overflow-hidden shrink-0">
-          {/* Progress Banner */}
-          <div className="p-4 border-b border-white/[0.05] bg-white/[0.01]">
-            <h4 className="text-[10px] uppercase font-bold tracking-wider text-cyan-400 mb-2.5 font-mono">Unlocking Progress</h4>
-            <div className="flex gap-1.5">
+        <aside className="w-1/3 min-h-0 border-r border-slate-900 bg-slate-950/40 flex flex-col overflow-hidden shrink-0">
+          {/* Contest Problems List */}
+          <div className="p-4 border-b border-slate-900 bg-slate-950/20">
+            <h4 className="text-xs uppercase font-bold tracking-wider text-cyan-400 mb-2">Contest Problems</h4>
+            <div className="flex flex-wrap gap-1.5">
               {problems.map((p) => {
-                const isCurrent = p.id === currentProblemId;
-                const isSolved = p.order_index < (problems.find(pr => pr.id === currentProblemId)?.order_index || 0);
+                const isSelected = selectedProblem?.id === p.id;
                 return (
                   <button
                     key={p.id}
                     onClick={() => handleProblemSelect(p)}
-                    className={`flex-1 text-center py-2.5 text-xs font-black font-mono rounded-lg border transition-all duration-300 ${selectedProblem?.id === p.id
-                      ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] scale-[1.03]'
-                      : isSolved
-                        ? 'bg-emerald-950/20 border-emerald-900/60 text-emerald-400'
-                        : isCurrent
-                          ? 'bg-slate-800/80 border-slate-700 text-slate-200'
-                          : 'bg-black/40 border-transparent text-slate-600'
+                    className={`flex-1 text-center py-2 px-2 text-xs font-bold font-mono rounded border transition ${isSelected
+                      ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:border-cyan-500/50 hover:text-white'
                       }`}
                   >
                     P{p.order_index}
@@ -544,8 +537,8 @@ export default function Dashboard() {
           {/* Problem Statement, Submission History or Leaderboard */}
           {selectedProblem ? (
             leftTab === 'description' ? (
-              <div className="flex-1 p-6 overflow-y-auto space-y-5 select-text">
-                <div className="flex justify-between items-start gap-4">
+              <div className="theme-scrollbar flex-1 min-h-0 p-6 overflow-y-auto space-y-4">
+                <div className="flex justify-between items-start">
                   <div>
                     <span className="text-[10px] uppercase font-bold tracking-widest text-cyan-500 font-mono">Problem {selectedProblem.order_index}</span>
                     <h2 className="text-xl font-black text-white mt-1 leading-tight">{selectedProblem.title}</h2>
@@ -566,7 +559,7 @@ export default function Dashboard() {
                 </div>
               </div>
             ) : leftTab === 'history' ? (
-              <div className="flex-1 p-6 overflow-y-auto space-y-4">
+              <div className="theme-scrollbar flex-1 min-h-0 p-6 overflow-y-auto space-y-4">
                 <h4 className="font-bold text-sm text-slate-200">Submission History</h4>
                 {historySubmissions.length === 0 ? (
                   <p className="text-xs text-slate-600 py-4 text-center">No submissions yet for this problem.</p>
@@ -610,7 +603,7 @@ export default function Dashboard() {
                 )}
               </div>
             ) : (
-              <div className="flex-1 p-6 overflow-y-auto space-y-4">
+              <div className="theme-scrollbar flex-1 min-h-0 p-6 overflow-y-auto space-y-4">
                 <h4 className="font-bold text-sm text-slate-200">Real-Time Standings</h4>
                 {leaderboardList.length === 0 ? (
                   <p className="text-xs text-slate-600 py-4 text-center">No participants recorded yet.</p>
@@ -670,7 +663,7 @@ export default function Dashboard() {
         </aside>
 
         {/* RIGHT COLUMN: Code Editor & Console */}
-        <section className="flex-1 flex flex-col overflow-hidden bg-slate-900/10" onKeyDown={handleKeyDown}>
+        <section className="flex-1 min-h-0 flex flex-col overflow-hidden bg-slate-950" onKeyDown={handleKeyDown}>
           {/* Editor Header */}
           <div className="h-10 border-b border-white/[0.05] px-6 flex justify-between items-center bg-slate-900/30 backdrop-blur-md shrink-0">
             <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
@@ -682,7 +675,7 @@ export default function Dashboard() {
 
           {/* Monaco Editor Container */}
           <div
-            className="flex-1 relative bg-black/40"
+            className="flex-1 min-h-0 relative bg-black"
             onCopy={handleInterceptClipboard}
             onCut={handleInterceptClipboard}
             onPaste={handleInterceptClipboard}
@@ -734,7 +727,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="flex-1 p-4 font-mono text-xs text-slate-300 overflow-y-auto leading-relaxed whitespace-pre-wrap select-text bg-black/20">
+            <div className="theme-scrollbar flex-1 p-4 font-mono text-xs text-slate-400 overflow-y-auto leading-relaxed whitespace-pre-wrap select-text">
               {consoleLogs}
             </div>
           </div>

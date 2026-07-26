@@ -39,8 +39,6 @@ export default function Dashboard() {
   const [problemFormTcInput, setProblemFormTcInput] = useState('');
   const [problemFormTcOutput, setProblemFormTcOutput] = useState('');
   const [problemFormTcIsHidden, setProblemFormTcIsHidden] = useState(true);
-  const [isGeneratingOutput, setIsGeneratingOutput] = useState(false);
-  const [isGeneratingOutputTC, setIsGeneratingOutputTC] = useState(false);
 
   // Test Case States
   const [selectedProblemForTC, setSelectedProblemForTC] = useState(null);
@@ -49,6 +47,8 @@ export default function Dashboard() {
   const [tcOutput, setTcOutput] = useState('');
   const [tcIsHidden, setTcIsHidden] = useState(true);
   const [bulkTcJson, setBulkTcJson] = useState('');
+  const [isGeneratingOutput, setIsGeneratingOutput] = useState(false);
+  const [isGeneratingOutputTC, setIsGeneratingOutputTC] = useState(false);
 
   // Leaderboard State
   const [leaderboardList, setLeaderboardList] = useState([]);
@@ -962,7 +962,7 @@ export default function Dashboard() {
                     <div className="border-t border-slate-900 pt-5 space-y-4">
                       <div className="flex justify-between items-start gap-4">
                         <div>
-                          <h5 className="flex items-center gap-1 text-xs font-bold text-cyan-400 uppercase">Initial Test Cases</h5>
+                          <h5 className="text-xs font-bold text-cyan-400 uppercase">Initial Test Cases</h5>
                           <p className="text-[10px] text-slate-500 mt-1">
                             Add cases now, or manage them later from the test-case panel.
                           </p>

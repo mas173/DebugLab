@@ -8,21 +8,28 @@ import * as db from '../db.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Create temp directory for compilation
+// Create temp directory for compilation inside workspace
 const TEMP_DIR = path.join(__dirname, '..', '..', 'temp', 'submissions');
 if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
 }
 
+const DOCKER_IMAGE = 'alpine';
+const DOCKER_STARTUP_GRACE_MS = 3000;
+
 /**
- * Execute child process wrapped in a Promise
+ * Standardize output (strip trailing line whitespace and normalize CRLF/LF)
  */
-function execPromise(command, options = {}) {
-  return new Promise((resolve, reject) => {
-    exec(command, options, (error, stdout, stderr) => {
-      resolve({ error, stdout, stderr });
-    });
-  });
+function standardize(str) {
+  if (str === null || str === undefined) return '';
+  return str
+    .toString()
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map(line => line.trimEnd())
+    .join('\n')
+    .trim();
 }
 
 /**
@@ -41,45 +48,117 @@ function cleanupFiles(...filepaths) {
 }
 
 /**
- * Compiles C source code to a static binary on the host
+ * Compiles C source code on the host
  */
-async function compileSource(sourcePath, binaryPath) {
-  // Use static linking so it runs inside alpine without musl/glibc issues
-  // If static linking fails on developer system, fall back to standard compile
-  const compileCmd = `gcc -static -O2 "${sourcePath}" -o "${binaryPath}"`;
-  let result = await execPromise(compileCmd);
-  
-  if (result.error) {
-    console.warn('Static compilation failed, trying standard compilation...');
-    const fallbackCmd = `gcc -O2 "${sourcePath}" -o "${binaryPath}"`;
-    result = await execPromise(fallbackCmd);
-  }
-  
-  return result;
+function compileSource(sourcePath, binaryPath) {
+  return new Promise((resolve) => {
+    const isWindows = process.platform === 'win32';
+    const compileCmd = `gcc -O2 "${sourcePath}" -o "${binaryPath}"`;
+
+    exec(compileCmd, { timeout: 10000 }, (error, stdout, stderr) => {
+      resolve({ error, stdout, stderr });
+    });
+  });
 }
 
 /**
- * Runs a binary inside the Docker sandbox or falls back to host execution
+ * Executes a binary natively on host with timeout enforcement
+ */
+function runHostExecution(binaryPath, input, timeLimitMs) {
+  return new Promise((resolve) => {
+    const startTime = process.hrtime();
+    let stdout = '';
+    let stderr = '';
+    let timeoutTriggered = false;
+
+    const child = spawn(binaryPath, [], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    const timer = setTimeout(() => {
+      timeoutTriggered = true;
+      try { child.kill('SIGKILL'); } catch (e) {}
+    }, timeLimitMs);
+
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      resolve({
+        status: 'runtime_error',
+        error: `Host process execution error: ${err.message}`,
+        timeMs: 0,
+        stdout,
+        stderr
+      });
+    });
+
+    child.on('close', (code, signal) => {
+      clearTimeout(timer);
+      const endTime = process.hrtime(startTime);
+      const elapsedMs = Math.round((endTime[0] * 1000) + (endTime[1] / 1000000));
+
+      if (timeoutTriggered || signal === 'SIGKILL') {
+        return resolve({
+          status: 'time_limit_exceeded',
+          timeMs: timeLimitMs,
+          stdout,
+          stderr
+        });
+      }
+
+      if (code !== 0) {
+        return resolve({
+          status: 'runtime_error',
+          timeMs: elapsedMs,
+          stdout,
+          stderr,
+          exitCode: code
+        });
+      }
+
+      resolve({
+        status: 'success',
+        timeMs: elapsedMs,
+        stdout,
+        stderr
+      });
+    });
+
+    if (input !== null && input !== undefined) {
+      try {
+        const inputStr = input.toString();
+        child.stdin.write(inputStr);
+        if (!inputStr.endsWith('\n')) {
+          child.stdin.write('\n');
+        }
+      } catch (e) {}
+    }
+    try { child.stdin.end(); } catch (e) {}
+  });
+}
+
+/**
+ * Runs a binary inside Docker sandbox with automatic native host fallback
  */
 function runSandbox(binaryPath, input, timeLimitMs, memoryLimitKb) {
-  return new Promise((resolve) => {
+  return new Promise(async (resolve) => {
     const isWindows = process.platform === 'win32';
+
+    if (isWindows) {
+      const hostRes = await runHostExecution(binaryPath, input, timeLimitMs);
+      return resolve(hostRes);
+    }
+
     const binaryFilename = path.basename(binaryPath);
     const binaryDir = path.dirname(binaryPath);
-
-    // Default: Docker run command
-    // We mount the directory containing the binary, mapping it to /app inside container
-    // Disable network, limit cpus, memory and set timeout
-    const memoryLimitMb = Math.ceil(memoryLimitKb / 1024);
-    
-    // Windows vs POSIX docker path conversion
-    let volumeMountPath = binaryDir;
-    if (isWindows) {
-      // Convert E:\foo\bar to /e/foo/bar for docker mounting
-      volumeMountPath = binaryDir
-        .replace(/^([A-Za-z]):/, (_, letter) => `/${letter.toLowerCase()}`)
-        .replace(/\\/g, '/');
-    }
+    const memoryLimitMb = Math.max(16, Math.ceil(memoryLimitKb / 1024));
 
     const dockerCmd = 'docker';
     const dockerArgs = [
@@ -91,137 +170,101 @@ function runSandbox(binaryPath, input, timeLimitMs, memoryLimitKb) {
       '--memory-swap', `${memoryLimitMb}m`,
       '--cpus', '0.5',
       '--pids-limit', '50',
-      '-v', `${volumeMountPath}:/app:ro`,
+      '-v', `${binaryDir}:/app:ro`,
       '-w', '/app',
-      'alpine',
+      DOCKER_IMAGE,
       `./${binaryFilename}`
     ];
 
-    // Fallback: Local host execution command
-    const localCmd = binaryPath;
-    const localArgs = [];
+    let stdout = '';
+    let stderr = '';
+    let startTime = process.hrtime();
+    let timeoutTriggered = false;
 
-    // If the host is Windows, we run natively because a Linux Docker container cannot execute a Windows PE (.exe) binary.
-    let cmd = isWindows ? localCmd : dockerCmd;
-    let args = isWindows ? localArgs : dockerArgs;
+    let child;
+    try {
+      child = spawn(dockerCmd, dockerArgs);
+    } catch (err) {
+      console.warn('Docker spawn failed, falling back to host execution:', err.message);
+      const hostRes = await runHostExecution(binaryPath, input, timeLimitMs);
+      return resolve(hostRes);
+    }
 
-    let isFallback = isWindows;
+    const timeoutMs = timeLimitMs + DOCKER_STARTUP_GRACE_MS;
+    const timer = setTimeout(() => {
+      timeoutTriggered = true;
+      try { child.kill('SIGKILL'); } catch (e) {}
+    }, timeoutMs);
 
-    const executeProcess = (runCmd, runArgs) => {
-      const child = spawn(runCmd, runArgs);
-      
-      let stdout = '';
-      let stderr = '';
-      let startTime = process.hrtime();
-      let timeoutTriggered = false;
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
 
-      // Handle time limit using standard timeout
-      const timer = setTimeout(() => {
-        timeoutTriggered = true;
-        child.kill('SIGKILL');
-      }, timeLimitMs);
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
 
-      child.stdout.on('data', (data) => {
-        stdout += data.toString();
-      });
+    child.on('error', async (err) => {
+      clearTimeout(timer);
+      console.warn('Docker execution error, falling back to host execution:', err.message);
+      const hostRes = await runHostExecution(binaryPath, input, timeLimitMs);
+      return resolve(hostRes);
+    });
 
-      child.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
+    child.on('close', async (code) => {
+      clearTimeout(timer);
+      const endTime = process.hrtime(startTime);
+      const elapsedMs = Math.round((endTime[0] * 1000) + (endTime[1] / 1000000));
 
-      child.on('error', (err) => {
-        clearTimeout(timer);
-        if (runCmd === 'docker' && !isFallback) {
-          console.warn('Docker execution failed to start. Falling back to local execution...');
-          isFallback = true;
-          executeProcess(localCmd, localArgs);
-        } else {
-          resolve({
-            status: 'runtime_error',
-            error: err.message,
-            timeMs: 0
-          });
-        }
-      });
+      // If Docker container failed to run (e.g. mount error, daemon unavailable, exit code 125, 127, 126)
+      if (code === 125 || code === 127 || code === 126 || stderr.includes('mounts denied') || stderr.includes('no such file')) {
+        console.warn(`Docker sandbox returned code ${code}. Falling back to host execution...`);
+        const hostRes = await runHostExecution(binaryPath, input, timeLimitMs);
+        return resolve(hostRes);
+      }
 
-      child.on('close', (code) => {
-        clearTimeout(timer);
-        
-        // If docker failed (exit code 125, 127 or similar startup issues), fall back
-        if (runCmd === 'docker' && code !== 0 && (stderr.includes('docker') || stderr.includes('daemon') || code === 125)) {
-          console.warn('Docker daemon not running or mount failed. Falling back to local execution...');
-          isFallback = true;
-          executeProcess(localCmd, localArgs);
-          return;
-        }
-
-        const endTime = process.hrtime(startTime);
-        const elapsedMs = Math.round((endTime[0] * 1000) + (endTime[1] / 1000000));
-
-        if (timeoutTriggered) {
-          return resolve({
-            status: 'time_limit_exceeded',
-            timeMs: timeLimitMs,
-            stdout,
-            stderr
-          });
-        }
-
-        if (code !== 0) {
-          return resolve({
-            status: 'runtime_error',
-            timeMs: elapsedMs,
-            stdout,
-            stderr,
-            exitCode: code
-          });
-        }
-
-        resolve({
-          status: 'success',
-          timeMs: elapsedMs,
+      if (timeoutTriggered) {
+        return resolve({
+          status: 'time_limit_exceeded',
+          timeMs: timeLimitMs,
           stdout,
           stderr
         });
-      });
-
-      // Catch EPIPE/stream errors on child stdin to prevent crashing the main server process
-      if (child.stdin) {
-        child.stdin.on('error', (err) => {
-          console.warn('Child stdin write error (caught to prevent crash):', err.message);
-        });
-
-        // Write test case inputs to child process stdin safely
-        if (input && child.stdin.writable) {
-          child.stdin.write(input);
-        }
-        if (child.stdin.writable) {
-          child.stdin.end();
-        }
       }
-    };
 
-    executeProcess(cmd, args);
+      if (code !== 0) {
+        return resolve({
+          status: 'runtime_error',
+          timeMs: elapsedMs,
+          stdout,
+          stderr,
+          exitCode: code
+        });
+      }
+
+      resolve({
+        status: 'success',
+        timeMs: elapsedMs,
+        stdout,
+        stderr
+      });
+    });
+
+    if (input !== null && input !== undefined) {
+      try {
+        const inputStr = input.toString();
+        child.stdin.write(inputStr);
+        if (!inputStr.endsWith('\n')) {
+          child.stdin.write('\n');
+        }
+      } catch (e) {}
+    }
+    try { child.stdin.end(); } catch (e) {}
   });
 }
 
 /**
- * Standardize output (strip trailing whitespaces/newlines for comparison)
- */
-function standardize(str) {
-  if (str === null || str === undefined) return '';
-  return str
-    .toString()
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .map(line => line.trimEnd())
-    .join('\n')
-    .trim();
-}
-
-/**
- * Orchestrates compiling C code and running test cases inside the sandbox
+ * Orchestrates compiling C code and running test cases inside the judge engine
  */
 export async function judgeSubmission(submissionId, sourceCode, problemId, timeLimitMs, memoryLimitKb) {
   const uuid = uuidv4();
@@ -243,14 +286,15 @@ export async function judgeSubmission(submissionId, sourceCode, problemId, timeL
 
     // 3. Fetch test cases from database
     const testCasesRes = await db.query(
-      "SELECT id, input, expected_output, is_hidden FROM test_cases WHERE problem_id = $1 ORDER BY id ASC",
+      "SELECT id, input, expected_output, is_hidden FROM test_cases WHERE problem_id = $1 ORDER BY created_at ASC, id ASC",
       [problemId]
     );
     const testCases = testCasesRes.rows;
 
     if (testCases.length === 0) {
       return {
-        status: 'accepted',
+        status: 'runtime_error',
+        compileErrorLog: 'Judge configuration error: no test cases are configured for this problem.',
         passedCases: 0,
         totalCases: 0,
         timeMs: 0
@@ -283,7 +327,7 @@ export async function judgeSubmission(submissionId, sourceCode, problemId, timeL
         };
       }
 
-      // Check outputs
+      // Compare outputs using output standardization
       const actualOut = standardize(run.stdout);
       const expectedOut = standardize(tc.expected_output);
 
