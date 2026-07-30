@@ -16,7 +16,7 @@ export async function getActiveContest(req, res) {
   try {
     // Select the contest that is active or paused. If multiple, get the most recent active one
     const result = await db.query(
-      "SELECT id, title, description, status, start_time, duration_minutes FROM contests WHERE status IN ('active', 'paused') ORDER BY start_time DESC LIMIT 1"
+      "SELECT id, title, description, status, start_time, duration_minutes, elapsed_seconds FROM contests WHERE status IN ('active', 'paused') ORDER BY start_time DESC LIMIT 1"
     );
     if (result.rows.length === 0) {
       return res.json({ contest: null });
@@ -40,7 +40,7 @@ export async function createContest(req, res) {
 
   try {
     const result = await db.query(
-      'INSERT INTO contests (title, description, duration_minutes, status) VALUES ($1, $2, $3, $4) RETURNING *',
+      'INSERT INTO contests (title, description, duration_minutes, elapsed_seconds, status) VALUES ($1, $2, $3, 0, $4) RETURNING *',
       [title, description, duration, 'draft']
     );
     return res.status(201).json({ contest: result.rows[0] });
@@ -114,20 +114,38 @@ export async function updateContestStatus(req, res) {
     }
 
     const currentContest = check.rows[0];
-    let queryText = 'UPDATE contests SET status = $1 ';
-    const params = [status, id];
+    let newElapsed = parseInt(currentContest.elapsed_seconds, 10) || 0;
 
-    // If starting the contest for the first time, record the start time
-    if (status === 'active' && !currentContest.start_time) {
-      queryText += ', start_time = CURRENT_TIMESTAMP ';
-    }
-    
-    // If ending the contest, record end time
-    if (status === 'ended' && !currentContest.end_time) {
-      queryText += ', end_time = CURRENT_TIMESTAMP ';
+    // If currently active and transitioning out of active (e.g. to paused or ended),
+    // calculate actual seconds elapsed during this active run
+    if (currentContest.status === 'active' && currentContest.start_time) {
+      const now = new Date();
+      const started = new Date(currentContest.start_time);
+      const diffSecs = Math.max(0, Math.floor((now - started) / 1000));
+      newElapsed += diffSecs;
     }
 
-    queryText += 'WHERE id = $2 RETURNING *';
+    let queryText = '';
+    let params = [];
+
+    if (status === 'active') {
+      // If moving to active from draft/ready/ended, start fresh with 0 elapsed seconds
+      if (['draft', 'ready', 'ended'].includes(currentContest.status)) {
+        newElapsed = 0;
+      }
+      queryText = 'UPDATE contests SET status = $1, elapsed_seconds = $2, start_time = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *';
+      params = [status, newElapsed, id];
+    } else if (status === 'paused') {
+      queryText = 'UPDATE contests SET status = $1, elapsed_seconds = $2, start_time = NULL WHERE id = $3 RETURNING *';
+      params = [status, newElapsed, id];
+    } else if (status === 'ended') {
+      queryText = 'UPDATE contests SET status = $1, elapsed_seconds = $2, end_time = COALESCE(end_time, CURRENT_TIMESTAMP) WHERE id = $3 RETURNING *';
+      params = [status, newElapsed, id];
+    } else if (status === 'draft' || status === 'ready') {
+      // Resetting to draft or ready wipes elapsed time & start_time
+      queryText = 'UPDATE contests SET status = $1, elapsed_seconds = 0, start_time = NULL, end_time = NULL WHERE id = $2 RETURNING *';
+      params = [status, id];
+    }
 
     const result = await db.query(queryText, params);
     const updatedContest = result.rows[0];
@@ -140,6 +158,7 @@ export async function updateContestStatus(req, res) {
         status: updatedContest.status,
         startTime: updatedContest.start_time,
         durationMinutes: updatedContest.duration_minutes,
+        elapsedSeconds: updatedContest.elapsed_seconds,
       });
     }
 
@@ -147,5 +166,52 @@ export async function updateContestStatus(req, res) {
   } catch (error) {
     console.error('Error updating contest status:', error);
     return res.status(500).json({ error: 'Internal server error updating contest status.' });
+  }
+}
+
+// Add extra duration (in minutes) to an ongoing or paused contest (Admin only)
+export async function addContestTime(req, res) {
+  const { id } = req.params;
+  const { minutes } = req.body;
+
+  const additionalMinutes = parseInt(minutes, 10);
+  if (isNaN(additionalMinutes) || additionalMinutes <= 0) {
+    return res.status(400).json({ error: 'Valid positive minutes value is required.' });
+  }
+
+  try {
+    const check = await db.query('SELECT * FROM contests WHERE id = $1', [id]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Contest not found.' });
+    }
+
+    const currentContest = check.rows[0];
+    const newDuration = (currentContest.duration_minutes || 60) + additionalMinutes;
+
+    const result = await db.query(
+      'UPDATE contests SET duration_minutes = $1 WHERE id = $2 RETURNING *',
+      [newDuration, id]
+    );
+
+    const updatedContest = result.rows[0];
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('contest_status_changed', {
+        contestId: updatedContest.id,
+        status: updatedContest.status,
+        startTime: updatedContest.start_time,
+        durationMinutes: updatedContest.duration_minutes,
+        elapsedSeconds: updatedContest.elapsed_seconds,
+      });
+    }
+
+    return res.json({
+      contest: updatedContest,
+      message: `Added ${additionalMinutes} minutes to contest duration.`
+    });
+  } catch (error) {
+    console.error('Error adding contest time:', error);
+    return res.status(500).json({ error: 'Internal server error adding contest time.' });
   }
 }

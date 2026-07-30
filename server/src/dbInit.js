@@ -15,6 +15,7 @@ async function initializeDatabase() {
 
     // Run the schema queries
     await db.query(schemaSql);
+    await db.query("ALTER TABLE contests ADD COLUMN IF NOT EXISTS elapsed_seconds INTEGER NOT NULL DEFAULT 0;");
     console.log('Database schema initialized successfully.');
 
     // Seed default admin if none exists

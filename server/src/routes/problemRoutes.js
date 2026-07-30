@@ -50,6 +50,7 @@ router.delete('/admin/:id', requireAdmin, deleteProblem);
 router.get('/admin/:problemId/testcases', requireAdmin, getProblemTestCases);
 router.post('/admin/:problemId/testcases', requireAdmin, createTestCase);
 router.post('/admin/:problemId/testcases/bulk', requireAdmin, uploadBulkTestCases);
+router.delete('/admin/testcases/:id', requireAdmin, deleteTestCase);
 router.post(
   '/admin/:problemId/testcases/upload',
   requireAdmin,

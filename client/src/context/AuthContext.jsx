@@ -17,6 +17,19 @@ export function AuthProvider({ children }) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     }
 
+    // Response interceptor to handle expired or invalid tokens automatically
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response && error.response.status === 401) {
+          setUser(null);
+          localStorage.removeItem('token');
+          delete axios.defaults.headers.common['Authorization'];
+        }
+        return Promise.reject(error);
+      }
+    );
+
     async function checkAuth() {
       try {
         const res = await axios.get('/api/auth/me');
@@ -32,6 +45,10 @@ export function AuthProvider({ children }) {
       }
     }
     checkAuth();
+
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
   }, []);
 
   const login = async (username, password) => {

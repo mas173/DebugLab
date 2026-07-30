@@ -56,6 +56,7 @@ import problemRoutes from './routes/problemRoutes.js';
 import submissionRoutes from './routes/submissionRoutes.js';
 import leaderboardRoutes from './routes/leaderboardRoutes.js';
 import monitoringRoutes from './routes/monitoringRoutes.js';
+import userRoutes from './routes/userRoutes.js';
 
 // Basic test route
 app.get('/api/health', (req, res) => {
@@ -69,6 +70,7 @@ app.use('/api/problems', problemRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/admin/monitoring', monitoringRoutes);
+app.use('/api/admin/users', userRoutes);
 
 function parseCookies(cookieHeader) {
   if (!cookieHeader) return {};
@@ -82,15 +84,27 @@ function parseCookies(cookieHeader) {
 
 // Socket.IO Authentication Middleware
 io.use((socket, next) => {
-  const cookieHeader = socket.handshake.headers.cookie;
-  const cookies = parseCookies(cookieHeader);
-  let token = cookies.token;
+  let token = null;
 
-  if (!token && socket.handshake.headers.authorization) {
+  // Prioritize token passed explicitly in auth payload or headers over shared cookies
+  if (socket.handshake.auth && socket.handshake.auth.token) {
+    const rawToken = socket.handshake.auth.token;
+    if (rawToken.startsWith('Bearer ')) {
+      token = rawToken.split(' ')[1];
+    } else {
+      token = rawToken;
+    }
+  } else if (socket.handshake.headers.authorization) {
     const parts = socket.handshake.headers.authorization.split(' ');
     if (parts.length === 2 && parts[0] === 'Bearer') {
       token = parts[1];
     }
+  }
+
+  if (!token) {
+    const cookieHeader = socket.handshake.headers.cookie;
+    const cookies = parseCookies(cookieHeader);
+    token = cookies.token;
   }
 
   if (!token) {

@@ -130,6 +130,10 @@ export async function deleteProblem(req, res) {
 export async function getProblemTestCases(req, res) {
   const { problemId } = req.params;
 
+  if (!problemId || problemId === 'undefined') {
+    return res.status(400).json({ error: 'Valid problemId is required.' });
+  }
+
   try {
     const result = await db.query(
       'SELECT id, problem_id, input, expected_output, is_hidden, created_at FROM test_cases WHERE problem_id = $1 ORDER BY created_at ASC',
@@ -137,6 +141,9 @@ export async function getProblemTestCases(req, res) {
     );
     return res.json({ testCases: result.rows });
   } catch (error) {
+    if (error.code === '22P02') {
+      return res.status(400).json({ error: 'Invalid problem ID format.' });
+    }
     console.error('Error fetching test cases:', error);
     return res.status(500).json({ error: 'Internal server error fetching test cases.' });
   }

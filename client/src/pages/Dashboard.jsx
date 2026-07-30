@@ -28,6 +28,7 @@ export default function Dashboard() {
   const [consoleLogs, setConsoleLogs] = useState('Console initialized. Ready to debug.\n');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [verdict, setVerdict] = useState(null);
+  const [lastSubmissionStats, setLastSubmissionStats] = useState(null); // { passed, total, status }
   const [saveStatus, setSaveStatus] = useState('Saved'); // 'Saved' | 'Saving...' | 'Error'
   const [leftTab, setLeftTab] = useState('description'); // 'description' | 'history' | 'leaderboard'
   const [historySubmissions, setHistorySubmissions] = useState([]);
@@ -37,7 +38,8 @@ export default function Dashboard() {
 
   const fetchLeaderboard = async () => {
     try {
-      const res = await axios.get('/api/leaderboard');
+      const url = contest?.id ? `/api/leaderboard?contestId=${contest.id}` : '/api/leaderboard';
+      const res = await axios.get(url);
       setLeaderboardList(res.data.leaderboard || []);
     } catch (err) {
       console.error('Error fetching leaderboard:', err);
@@ -154,15 +156,22 @@ export default function Dashboard() {
   };
 
   const calculateTimeRemaining = (currentContest) => {
-    if (!currentContest || currentContest.status !== 'active') {
+    if (!currentContest || !['active', 'paused'].includes(currentContest.status)) {
       setTimeRemaining(0);
       return;
     }
-    const startTime = new Date(currentContest.start_time).getTime();
-    const durationMs = currentContest.duration_minutes * 60 * 1000;
-    const endTime = startTime + durationMs;
-    const now = new Date().getTime();
-    const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
+
+    const durationSecs = (parseInt(currentContest.duration_minutes, 10) || 60) * 60;
+    let elapsedSecs = parseInt(currentContest.elapsed_seconds, 10) || 0;
+
+    if (currentContest.status === 'active' && currentContest.start_time) {
+      const startTime = new Date(currentContest.start_time).getTime();
+      const now = new Date().getTime();
+      const runningSecs = Math.max(0, Math.floor((now - startTime) / 1000));
+      elapsedSecs += runningSecs;
+    }
+
+    const remaining = Math.max(0, durationSecs - elapsedSecs);
     setTimeRemaining(remaining);
   };
 
@@ -173,23 +182,18 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Timer countdown
+  // Timer countdown - recalculates wall-clock time remaining every second
   useEffect(() => {
-    if (!contest || contest.status !== 'active' || timeRemaining <= 0) return;
+    if (!contest || contest.status !== 'active') return;
+
+    calculateTimeRemaining(contest);
 
     const interval = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          loadWorkspace(); // Refresh state
-          return 0;
-        }
-        return prev - 1;
-      });
+      calculateTimeRemaining(contest);
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [contest, timeRemaining]);
+  }, [contest]);
 
   // Socket triggers
   useEffect(() => {
@@ -197,15 +201,13 @@ export default function Dashboard() {
 
     socket.on('contest_status_changed', (data) => {
       setContest((prev) => {
-        if (!prev && data.status !== 'active' && data.status !== 'paused') {
-          return null;
-        }
-
-        const updated = prev ? { ...prev, status: data.status } : {
+        const updated = {
+          ...(prev || {}),
           id: data.contestId,
           status: data.status,
           start_time: data.startTime,
-          duration_minutes: data.durationMinutes
+          duration_minutes: Number(data.durationMinutes),
+          elapsed_seconds: Number(data.elapsedSeconds !== undefined ? data.elapsedSeconds : (prev?.elapsed_seconds || 0))
         };
 
         calculateTimeRemaining(updated);
@@ -272,11 +274,17 @@ export default function Dashboard() {
       const status = sub.status;
 
       setVerdict(status);
+      setLastSubmissionStats({
+        passed: sub.passed_test_cases || 0,
+        total: sub.total_test_cases || 0,
+        status: status
+      });
 
       if (status === 'accepted') {
         toast.success('Accepted! Problem Solved!');
         setConsoleLogs((prev) =>
           prev + `\n[VERDICT]: ACCEPTED (100% Correct)\n` +
+          `- Test Cases Passed: ${sub.passed_test_cases}/${sub.total_test_cases}\n` +
           `- Execution Time: ${sub.execution_time_ms || 0} ms\n` +
           `- Unlocked next problem. Reloading workspace...\n`
         );
@@ -286,6 +294,7 @@ export default function Dashboard() {
         toast.error('Compilation Error.');
         setConsoleLogs((prev) =>
           prev + `\n[VERDICT]: COMPILATION ERROR\n` +
+          `- Test Cases Passed: 0/${sub.total_test_cases || 0}\n` +
           `------------------------------\n` +
           `${sub.compile_error_log}\n` +
           `------------------------------\n`
@@ -446,10 +455,16 @@ export default function Dashboard() {
         </div>
 
         {/* Timer */}
-        <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-2 shadow-inner">
-          <Clock size={14} className="text-cyan-400 animate-pulse" />
-          <span className="font-mono text-sm font-black tracking-wider text-white">
-            {formatTime(timeRemaining)}
+        <div className={`flex items-center gap-3 rounded-xl border px-4 py-2 shadow-inner ${
+          contest?.status === 'paused'
+            ? 'border-amber-500/30 bg-amber-500/10'
+            : 'border-white/[0.08] bg-white/[0.02]'
+        }`}>
+          <Clock size={14} className={contest?.status === 'active' ? 'text-cyan-400 animate-pulse' : 'text-amber-400'} />
+          <span className={`font-mono text-sm font-black tracking-wider ${
+            contest?.status === 'paused' ? 'text-amber-400' : 'text-white'
+          }`}>
+            {formatTime(timeRemaining)} {contest?.status === 'paused' && '(PAUSED)'}
           </span>
         </div>
 
@@ -611,9 +626,10 @@ export default function Dashboard() {
                   <div className="space-y-2">
                     <div className="grid grid-cols-12 text-[10px] uppercase font-mono text-slate-500 border-b border-slate-900 pb-2 px-1">
                       <span className="col-span-2">Rank</span>
-                      <span className="col-span-5">User</span>
+                      <span className="col-span-4">User</span>
                       <span className="col-span-2 text-center">Solved</span>
-                      <span className="col-span-3 text-right">Score</span>
+                      <span className="col-span-2 text-right">Score</span>
+                      <span className="col-span-2 text-right">Time</span>
                     </div>
                     {leaderboardList.map((lb) => {
                       const isMe = lb.participant_id === user.id;
@@ -639,14 +655,19 @@ export default function Dashboard() {
                               <span>{lb.rank}</span>
                             )}
                           </span>
-                          <span className="col-span-5 font-semibold truncate" title={lb.username}>
+                          <span className="col-span-4 font-semibold truncate" title={lb.username}>
                             {lb.username} {isMe && '(You)'}
                           </span>
                           <span className="col-span-2 text-center font-mono font-bold">
                             {lb.problems_solved}
                           </span>
-                          <span className="col-span-3 text-right font-mono font-bold text-white">
+                          <span className="col-span-2 text-right font-mono font-bold text-white">
                             {lb.score} pts
+                          </span>
+                          <span className="col-span-2 text-right font-mono text-[10px] text-slate-500">
+                            {lb.last_accepted_time
+                              ? new Date(lb.last_accepted_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              : '-'}
                           </span>
                         </div>
                       );
@@ -710,10 +731,23 @@ export default function Dashboard() {
           {/* CONSOLE / TERMINAL PANEL */}
           <div className="h-64 border-t border-white/[0.05] bg-slate-950/80 flex flex-col overflow-hidden shrink-0">
             <div className="h-11 border-b border-white/[0.05] px-6 flex justify-between items-center bg-slate-900/30 backdrop-blur-md shrink-0">
-              <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                <Terminal size={14} className="text-cyan-400" />
-                Execution Console
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Terminal size={14} className="text-cyan-400" />
+                  Execution Console
+                </span>
+                {lastSubmissionStats && (
+                  <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded border transition-all ${
+                    lastSubmissionStats.status === 'accepted'
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                      : lastSubmissionStats.status === 'compile_error'
+                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                      : 'bg-red-500/10 border-red-500/30 text-red-400'
+                  }`}>
+                    Passed: {lastSubmissionStats.passed}/{lastSubmissionStats.total} Cases
+                  </span>
+                )}
+              </div>
 
               <div className="flex gap-2">
                 <button
