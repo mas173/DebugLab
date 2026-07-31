@@ -29,5 +29,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
+  },
+  "nodemonConfig": {
+    "ignore": ["temp/*", "temp/**/*"]
   }
 }

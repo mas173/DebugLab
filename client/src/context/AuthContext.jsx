@@ -25,8 +25,10 @@ export function AuthProvider({ children }) {
         }
       } catch (err) {
         setUser(null);
-        localStorage.removeItem('token');
-        delete axios.defaults.headers.common['Authorization'];
+        if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+          localStorage.removeItem('token');
+          delete axios.defaults.headers.common['Authorization'];
+        }
       } finally {
         setLoading(false);
       }
