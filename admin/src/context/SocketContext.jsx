@@ -19,9 +19,11 @@ export function SocketProvider({ children }) {
       return;
     }
 
+    const token = localStorage.getItem('token');
     const socketInstance = io(SOCKET_URL, {
       withCredentials: true,
       autoConnect: true,
+      auth: { token: token ? `Bearer ${token}` : undefined },
     });
 
     setSocket(socketInstance);

@@ -4,7 +4,7 @@ import { useSocket } from '../context/SocketContext.jsx';
 import axios from 'axios';
 import {
   LogOut, Play, Pause, Award, Clock, Plus, Edit2, Trash2, Database, Users,
-  Settings, Save, X, Eye, EyeOff, FileText, ChevronRight, CheckCircle2, RefreshCcw
+  Settings, Save, X, Eye, EyeOff, FileText, ChevronRight, CheckCircle2, RefreshCcw, Key
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -39,8 +39,6 @@ export default function Dashboard() {
   const [problemFormTcInput, setProblemFormTcInput] = useState('');
   const [problemFormTcOutput, setProblemFormTcOutput] = useState('');
   const [problemFormTcIsHidden, setProblemFormTcIsHidden] = useState(true);
-  const [isGeneratingOutput, setIsGeneratingOutput] = useState(false);
-  const [isGeneratingOutputTC, setIsGeneratingOutputTC] = useState(false);
 
   // Test Case States
   const [selectedProblemForTC, setSelectedProblemForTC] = useState(null);
@@ -49,13 +47,16 @@ export default function Dashboard() {
   const [tcOutput, setTcOutput] = useState('');
   const [tcIsHidden, setTcIsHidden] = useState(true);
   const [bulkTcJson, setBulkTcJson] = useState('');
+  const [isGeneratingOutput, setIsGeneratingOutput] = useState(false);
+  const [isGeneratingOutputTC, setIsGeneratingOutputTC] = useState(false);
 
   // Leaderboard State
   const [leaderboardList, setLeaderboardList] = useState([]);
 
   const fetchLeaderboard = async () => {
     try {
-      const res = await axios.get('/api/leaderboard');
+      const url = selectedContest?.id ? `/api/leaderboard?contestId=${selectedContest.id}` : '/api/leaderboard';
+      const res = await axios.get(url);
       setLeaderboardList(res.data.leaderboard || []);
     } catch (err) {
       console.error('Failed to load leaderboard:', err);
@@ -83,12 +84,89 @@ export default function Dashboard() {
   const [participantDraftsMap, setParticipantDraftsMap] = useState({});
   const [selectedDraftProblemId, setSelectedDraftProblemId] = useState('');
 
+  // Add User Modal State
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState('participant');
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+
   const fetchParticipants = async () => {
     try {
-      const res = await axios.get('/api/admin/monitoring/participants');
-      setParticipantsList(res.data.participants || []);
+      const res = await axios.get('/api/admin/users');
+      setParticipantsList(res.data.users || []);
     } catch (err) {
-      console.error('Failed to load participants:', err);
+      console.error('Failed to load users:', err);
+    }
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    if (!newUsername.trim() || !newPassword.trim()) {
+      toast.error('Username and password are required.');
+      return;
+    }
+    setIsCreatingUser(true);
+    try {
+      await axios.post('/api/admin/users', {
+        username: newUsername.trim(),
+        password: newPassword.trim(),
+        role: newUserRole,
+      });
+      toast.success(`User "${newUsername.trim()}" created successfully!`);
+      setNewUsername('');
+      setNewPassword('');
+      setNewUserRole('participant');
+      setIsAddUserModalOpen(false);
+      fetchParticipants();
+      fetchStats();
+    } catch (err) {
+      console.error('Failed to create user:', err);
+      toast.error(err.response?.data?.error || 'Failed to create user.');
+    } finally {
+      setIsCreatingUser(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId, username) => {
+    if (!window.confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      await axios.delete(`/api/admin/users/${userId}`);
+      toast.success(`User "${username}" deleted successfully.`);
+      fetchParticipants();
+      fetchStats();
+    } catch (err) {
+      console.error('Failed to delete user:', err);
+      toast.error(err.response?.data?.error || 'Failed to delete user.');
+    }
+  };
+
+  // Update User Password Modal State
+  const [selectedUserForPasswordReset, setSelectedUserForPasswordReset] = useState(null);
+  const [resetPasswordInput, setResetPasswordInput] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    if (!resetPasswordInput.trim()) {
+      toast.error('New password is required.');
+      return;
+    }
+    setIsUpdatingPassword(true);
+    try {
+      await axios.put(`/api/admin/users/${selectedUserForPasswordReset.id}/password`, {
+        newPassword: resetPasswordInput.trim(),
+      });
+      toast.success(`Password updated successfully for "${selectedUserForPasswordReset.username}"!`);
+      setResetPasswordInput('');
+      setSelectedUserForPasswordReset(null);
+    } catch (err) {
+      console.error('Failed to update password:', err);
+      toast.error(err.response?.data?.error || 'Failed to update password.');
+    } finally {
+      setIsUpdatingPassword(false);
     }
   };
 
@@ -247,6 +325,57 @@ export default function Dashboard() {
     } catch (err) {
       console.error(err);
       toast.error('Failed to update contest status.');
+    }
+  };
+
+  // Add time to active/paused contest
+  const [customAddMinutes, setCustomAddMinutes] = useState('');
+  const [adminTimeRemaining, setAdminTimeRemaining] = useState(0);
+
+  const calculateAdminTimeRemaining = (contest) => {
+    if (!contest || !['active', 'paused'].includes(contest.status)) {
+      setAdminTimeRemaining(0);
+      return;
+    }
+    const durationSecs = (parseInt(contest.duration_minutes, 10) || 60) * 60;
+    let elapsedSecs = parseInt(contest.elapsed_seconds, 10) || 0;
+
+    if (contest.status === 'active' && contest.start_time) {
+      const startTime = new Date(contest.start_time).getTime();
+      const now = new Date().getTime();
+      const runningSecs = Math.max(0, Math.floor((now - startTime) / 1000));
+      elapsedSecs += runningSecs;
+    }
+
+    const remaining = Math.max(0, durationSecs - elapsedSecs);
+    setAdminTimeRemaining(remaining);
+  };
+
+  useEffect(() => {
+    if (!selectedContest || selectedContest.status !== 'active') {
+      calculateAdminTimeRemaining(selectedContest);
+      return;
+    }
+
+    calculateAdminTimeRemaining(selectedContest);
+
+    const interval = setInterval(() => {
+      calculateAdminTimeRemaining(selectedContest);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [selectedContest]);
+
+  const handleAddContestTime = async (minutes) => {
+    if (!selectedContest) return;
+    try {
+      const res = await axios.post(`/api/contests/${selectedContest.id}/add-time`, { minutes });
+      setSelectedContest(res.data.contest);
+      setContests(prev => prev.map(c => c.id === res.data.contest.id ? res.data.contest : c));
+      toast.success(`Added ${minutes} minute(s) to contest timer!`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || 'Failed to add time to contest.');
     }
   };
 
@@ -488,12 +617,17 @@ export default function Dashboard() {
 
   // Test Cases management
   const openTestCasesManager = async (prob) => {
+    if (!prob || !prob.id) {
+      toast.error('Invalid problem selected.');
+      return;
+    }
     setSelectedProblemForTC(prob);
     try {
       const res = await axios.get(`/api/problems/admin/${prob.id}/testcases`);
-      setTestCases(res.data.testCases);
+      setTestCases(res.data.testCases || []);
     } catch (err) {
-      toast.error('Failed to load test cases.');
+      console.error('Error fetching test cases:', err);
+      toast.error(err.response?.data?.error || 'Failed to load test cases.');
     }
   };
 
@@ -555,11 +689,11 @@ export default function Dashboard() {
       const res = await axios.post(`/api/problems/admin/${selectedProblemForTC.id}/testcases/bulk`, {
         testCases: parsed
       });
-      setTestCases(prev => [...prev, ...res.data.testCases]);
+      setTestCases(prev => [...prev, ...(res.data.testCases || [])]);
       setBulkTcJson('');
       toast.success(res.data.message || 'Bulk testcases uploaded successfully.');
     } catch (err) {
-      toast.error('Failed to upload bulk test cases. Ensure valid JSON list format.');
+      toast.error(err.response?.data?.error || 'Failed to upload bulk test cases. Ensure valid JSON list format.');
     }
   };
 
@@ -569,7 +703,7 @@ export default function Dashboard() {
       setTestCases(prev => prev.filter(tc => tc.id !== id));
       toast.success('Test case removed.');
     } catch (err) {
-      toast.error('Failed to delete testcase.');
+      toast.error(err.response?.data?.error || 'Failed to delete testcase.');
     }
   };
 
@@ -749,8 +883,27 @@ export default function Dashboard() {
               </div>
 
               <div className="rounded-xl border border-slate-900 bg-slate-950/80 p-6">
-                <h3 className="text-lg font-bold mb-1 text-white">Contest Status Manager</h3>
-                <p className="text-slate-400 text-sm mb-6">Transition the contest session lifecycle state in real-time.</p>
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Contest Status Manager</h3>
+                    <p className="text-slate-400 text-sm">Transition the contest session lifecycle state in real-time.</p>
+                  </div>
+                  {selectedContest && (
+                    <div className={`flex items-center gap-3 px-4 py-2 rounded-xl border font-mono text-sm font-bold ${
+                      selectedContest.status === 'active'
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                        : selectedContest.status === 'paused'
+                        ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                        : 'border-slate-800 bg-slate-900 text-slate-400'
+                    }`}>
+                      <Clock size={16} className={selectedContest.status === 'active' ? 'animate-pulse text-emerald-400' : ''} />
+                      <span>
+                        {Math.floor(adminTimeRemaining / 60)}m {adminTimeRemaining % 60}s
+                        {selectedContest.status === 'paused' ? ' (PAUSED)' : ''}
+                      </span>
+                    </div>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <button
@@ -800,6 +953,64 @@ export default function Dashboard() {
                     <span className="text-sm font-semibold text-red-400">End Session</span>
                     <span className="text-[10px] text-slate-500 mt-1">Finalize scores & locking</span>
                   </button>
+                </div>
+
+                {/* ADD EXTRA TIME CONTROLS */}
+                <div className="mt-6 pt-6 border-t border-slate-900">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <h4 className="text-sm font-bold text-white mb-0.5 flex items-center gap-2">
+                        <Clock size={16} className="text-cyan-400" /> Add Extra Time
+                      </h4>
+                      <p className="text-xs text-slate-400">Extend contest duration for ongoing or paused sessions in real-time.</p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => handleAddContestTime(5)}
+                        className="px-3.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500/50 hover:bg-cyan-500/10 text-xs font-bold text-cyan-400 transition"
+                      >
+                        + 5 Mins
+                      </button>
+                      <button
+                        onClick={() => handleAddContestTime(10)}
+                        className="px-3.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500/50 hover:bg-cyan-500/10 text-xs font-bold text-cyan-400 transition"
+                      >
+                        + 10 Mins
+                      </button>
+                      <button
+                        onClick={() => handleAddContestTime(15)}
+                        className="px-3.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500/50 hover:bg-cyan-500/10 text-xs font-bold text-cyan-400 transition"
+                      >
+                        + 15 Mins
+                      </button>
+
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="Mins"
+                          value={customAddMinutes}
+                          onChange={(e) => setCustomAddMinutes(e.target.value)}
+                          className="w-20 rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none font-mono"
+                        />
+                        <button
+                          onClick={() => {
+                            const mins = parseInt(customAddMinutes, 10);
+                            if (mins > 0) {
+                              handleAddContestTime(mins);
+                              setCustomAddMinutes('');
+                            } else {
+                              toast.error('Enter valid positive minutes.');
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 text-xs font-bold transition"
+                        >
+                          Add Custom
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -962,7 +1173,7 @@ export default function Dashboard() {
                     <div className="border-t border-slate-900 pt-5 space-y-4">
                       <div className="flex justify-between items-start gap-4">
                         <div>
-                          <h5 className="flex items-center gap-1 text-xs font-bold text-cyan-400 uppercase">Initial Test Cases</h5>
+                          <h5 className="text-xs font-bold text-cyan-400 uppercase">Initial Test Cases</h5>
                           <p className="text-[10px] text-slate-500 mt-1">
                             Add cases now, or manage them later from the test-case panel.
                           </p>
@@ -1270,25 +1481,33 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TAB 3: PARTICIPANTS */}
-          {activeTab === 'participants' && selectedContest && (
+          {/* TAB 3: PARTICIPANTS & USERS */}
+          {activeTab === 'participants' && (
             <div className="rounded-xl border border-slate-900 bg-slate-950/80 p-6 space-y-6">
               <div className="flex justify-between items-center border-b border-slate-900 pb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-white">Participants Listing</h3>
-                  <p className="text-slate-400 text-xs mt-0.5">View real-time participant connection statuses and active problem drafts.</p>
+                  <h3 className="text-lg font-bold text-white">User & Participant Management</h3>
+                  <p className="text-slate-400 text-xs mt-0.5">Manage registered accounts, connection statuses, and live problem drafts.</p>
                 </div>
-                <button
-                  onClick={fetchParticipants}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs text-cyan-400 font-semibold transition"
-                >
-                  <RefreshCcw size={12} /> Sync Statuses
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsAddUserModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] text-xs font-bold text-white transition"
+                  >
+                    <Plus size={14} /> Add User
+                  </button>
+                  <button
+                    onClick={fetchParticipants}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs text-cyan-400 font-semibold transition"
+                  >
+                    <RefreshCcw size={12} /> Sync Users
+                  </button>
+                </div>
               </div>
 
               {participantsList.length === 0 ? (
                 <div className="text-center py-12 text-slate-600 text-xs border border-dashed border-slate-900 rounded-lg bg-black/40">
-                  No participants registered. Sign them in from client machines to view connectivity logs.
+                  No users found in database. Click "Add User" above to create user accounts.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -1297,6 +1516,7 @@ export default function Dashboard() {
                       <tr className="border-b border-slate-900 text-[11px] uppercase tracking-wider text-slate-500 font-mono font-normal">
                         <th className="py-3 px-4 font-normal">Status</th>
                         <th className="py-3 px-4 font-normal">Username / ID</th>
+                        <th className="py-3 px-4 font-normal">Role</th>
                         <th className="py-3 px-4 font-normal text-center">Active Problem</th>
                         <th className="py-3 px-4 font-normal text-right">Last Sync Ping</th>
                         <th className="py-3 px-4 font-normal text-right">Actions</th>
@@ -1317,6 +1537,15 @@ export default function Dashboard() {
                             </span>
                           </td>
                           <td className="py-3.5 px-4 font-semibold text-slate-200">{p.username}</td>
+                          <td className="py-3.5 px-4 text-xs">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
+                              p.role === 'admin'
+                                ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400'
+                                : 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400'
+                            }`}>
+                              {p.role || 'participant'}
+                            </span>
+                          </td>
                           <td className="py-3.5 px-4 text-center font-mono text-xs">
                             {p.current_problem_title ? (
                               <span className="text-cyan-400">
@@ -1330,12 +1559,34 @@ export default function Dashboard() {
                             {p.last_active_at ? new Date(p.last_active_at).toLocaleTimeString() : 'Never'}
                           </td>
                           <td className="py-3.5 px-4 text-right">
-                            <button
-                              onClick={() => openParticipantModal(p)}
-                              className="text-xs text-cyan-400 hover:underline hover:text-cyan-300 font-semibold"
-                            >
-                              Inspect Live Code
-                            </button>
+                            <div className="flex items-center justify-end gap-3">
+                              {p.role !== 'admin' && (
+                                <button
+                                  onClick={() => openParticipantModal(p)}
+                                  className="text-xs text-cyan-400 hover:underline hover:text-cyan-300 font-semibold"
+                                >
+                                  Inspect Code
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setSelectedUserForPasswordReset(p);
+                                  setResetPasswordInput('');
+                                }}
+                                className="text-xs text-amber-400 hover:text-amber-300 hover:underline font-semibold flex items-center gap-1"
+                                title="Change Password"
+                              >
+                                <Key size={12} /> Password
+                              </button>
+                              <button
+                                onClick={() => handleDeleteUser(p.id, p.username)}
+                                disabled={p.id === user?.id}
+                                className="text-xs text-red-400 hover:text-red-300 hover:underline font-semibold disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1"
+                                title="Remove User"
+                              >
+                                <Trash2 size={12} /> Remove
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1625,6 +1876,151 @@ export default function Dashboard() {
                 Close Inspector
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD USER MODAL */}
+      {isAddUserModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-900 bg-slate-950 p-6 shadow-2xl space-y-6">
+            <div className="flex justify-between items-center border-b border-slate-900 pb-4">
+              <div className="flex items-center gap-2 text-cyan-400">
+                <Users size={20} />
+                <h3 className="text-lg font-bold text-white">Create New User</h3>
+              </div>
+              <button
+                onClick={() => setIsAddUserModalOpen(false)}
+                className="text-slate-500 hover:text-white transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. USER-104 or alex_dev"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3.5 py-2 text-sm text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter secure password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3.5 py-2 text-sm text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Password will be hashed securely using bcrypt before saving to database.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Role
+                </label>
+                <select
+                  value={newUserRole}
+                  onChange={(e) => setNewUserRole(e.target.value)}
+                  className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3.5 py-2 text-sm text-white focus:border-cyan-500 focus:outline-none"
+                >
+                  <option value="participant">Participant (Contestant)</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-900">
+                <button
+                  type="button"
+                  onClick={() => setIsAddUserModalOpen(false)}
+                  className="px-4 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-400 hover:text-white transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingUser}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] text-xs font-bold text-white transition disabled:opacity-40"
+                >
+                  <Plus size={14} />
+                  {isCreatingUser ? 'Creating...' : 'Create Account'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* RESET/UPDATE USER PASSWORD MODAL */}
+      {selectedUserForPasswordReset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-900 bg-slate-950 p-6 shadow-2xl space-y-6">
+            <div className="flex justify-between items-center border-b border-slate-900 pb-4">
+              <div className="flex items-center gap-2 text-amber-400">
+                <Key size={20} />
+                <h3 className="text-lg font-bold text-white">Reset User Password</h3>
+              </div>
+              <button
+                onClick={() => setSelectedUserForPasswordReset(null)}
+                className="text-slate-500 hover:text-white transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <div>
+                <p className="text-xs text-slate-400 mb-3">
+                  Updating password for user account: <span className="font-mono text-cyan-400 font-bold">{selectedUserForPasswordReset.username}</span>
+                </p>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter new password"
+                  value={resetPasswordInput}
+                  onChange={(e) => setResetPasswordInput(e.target.value)}
+                  className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3.5 py-2 text-sm text-white placeholder-slate-600 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Password will be hashed using bcrypt before updating in database.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-900">
+                <button
+                  type="button"
+                  onClick={() => setSelectedUserForPasswordReset(null)}
+                  className="px-4 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-400 hover:text-white transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingPassword}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:shadow-[0_0_15px_rgba(245,158,11,0.3)] text-xs font-bold text-slate-950 transition disabled:opacity-40"
+                >
+                  <Key size={14} />
+                  {isUpdatingPassword ? 'Updating...' : 'Update Password'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

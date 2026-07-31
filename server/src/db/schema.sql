@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS contests (
     start_time TIMESTAMP WITH TIME ZONE,
     end_time TIMESTAMP WITH TIME ZONE,
     duration_minutes INTEGER NOT NULL DEFAULT 60,
+    elapsed_seconds INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -41,8 +42,8 @@ CREATE TABLE IF NOT EXISTS problems (
 CREATE TABLE IF NOT EXISTS test_cases (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     problem_id UUID REFERENCES problems(id) ON DELETE CASCADE NOT NULL,
-    input TEXT NOT NULL,
-    expected_output TEXT NOT NULL,
+    input TEXT NOT NULL CHECK (length(trim(input)) > 0),
+    expected_output TEXT NOT NULL CHECK (length(trim(expected_output)) > 0),
     is_hidden BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

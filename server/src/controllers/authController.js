@@ -87,3 +87,32 @@ export async function getMe(req, res) {
   }
   return res.json({ user: req.user });
 }
+
+export async function updateSelfPassword(req, res) {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword || !newPassword.trim()) {
+    return res.status(400).json({ error: 'Current password and new password are required.' });
+  }
+
+  try {
+    const userRes = await db.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: 'User account not found.' });
+    }
+
+    const user = userRes.rows[0];
+    const match = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!match) {
+      return res.status(400).json({ error: 'Current password is incorrect.' });
+    }
+
+    const newHash = await bcrypt.hash(newPassword.trim(), 10);
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, user.id]);
+
+    return res.json({ message: 'Password updated successfully.' });
+  } catch (error) {
+    console.error('Error updating self password:', error);
+    return res.status(500).json({ error: 'Internal server error updating password.' });
+  }
+}

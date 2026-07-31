@@ -130,6 +130,10 @@ export async function deleteProblem(req, res) {
 export async function getProblemTestCases(req, res) {
   const { problemId } = req.params;
 
+  if (!problemId || problemId === 'undefined') {
+    return res.status(400).json({ error: 'Valid problemId is required.' });
+  }
+
   try {
     const result = await db.query(
       'SELECT id, problem_id, input, expected_output, is_hidden, created_at FROM test_cases WHERE problem_id = $1 ORDER BY created_at ASC',
@@ -137,6 +141,9 @@ export async function getProblemTestCases(req, res) {
     );
     return res.json({ testCases: result.rows });
   } catch (error) {
+    if (error.code === '22P02') {
+      return res.status(400).json({ error: 'Invalid problem ID format.' });
+    }
     console.error('Error fetching test cases:', error);
     return res.status(500).json({ error: 'Internal server error fetching test cases.' });
   }
@@ -151,12 +158,19 @@ export async function createTestCase(req, res) {
     return res.status(400).json({ error: 'input and expected_output are required.' });
   }
 
+  const trimmedInput = typeof input === 'string' ? input.trim() : String(input).trim();
+  const trimmedOutput = typeof expected_output === 'string' ? expected_output.trim() : String(expected_output).trim();
+
+  if (trimmedInput === '' || trimmedOutput === '') {
+    return res.status(400).json({ error: 'Test case input and expected output cannot be empty or whitespace only.' });
+  }
+
   const isHidden = is_hidden !== undefined ? !!is_hidden : true;
 
   try {
     const result = await db.query(
       'INSERT INTO test_cases (problem_id, input, expected_output, is_hidden) VALUES ($1, $2, $3, $4) RETURNING *',
-      [problemId, input, expected_output, isHidden]
+      [problemId, trimmedInput, trimmedOutput, isHidden]
     );
     return res.status(201).json({ testCase: result.rows[0] });
   } catch (error) {
@@ -207,10 +221,17 @@ export async function uploadBulkTestCases(req, res) {
       if (tc.input === undefined || tc.expected_output === undefined) {
         throw new Error('All test cases must contain input and expected_output.');
       }
+      const trimmedInput = typeof tc.input === 'string' ? tc.input.trim() : String(tc.input).trim();
+      const trimmedOutput = typeof tc.expected_output === 'string' ? tc.expected_output.trim() : String(tc.expected_output).trim();
+
+      if (trimmedInput === '' || trimmedOutput === '') {
+        throw new Error('Test case input and expected output cannot be empty or whitespace only.');
+      }
+
       const isHidden = tc.is_hidden !== undefined ? !!tc.is_hidden : true;
       const result = await db.query(
         'INSERT INTO test_cases (problem_id, input, expected_output, is_hidden) VALUES ($1, $2, $3, $4) RETURNING *',
-        [problemId, tc.input, tc.expected_output, isHidden]
+        [problemId, trimmedInput, trimmedOutput, isHidden]
       );
       insertedTestCases.push(result.rows[0]);
     }
@@ -223,7 +244,7 @@ export async function uploadBulkTestCases(req, res) {
   } catch (error) {
     await db.query('ROLLBACK');
     console.error('Error bulk uploading test cases:', error);
-    return res.status(500).json({ error: error.message || 'Internal server error uploading test cases.' });
+    return res.status(400).json({ error: error.message || 'Error uploading test cases.' });
   }
 }
 
@@ -284,30 +305,6 @@ export async function getContestProblemsParticipant(req, res) {
             'UPDATE participant_status SET current_problem_id = $1 WHERE participant_id = $2',
             [currentProblemId, participantId]
           );
-        }
-      }
-    }
-
-    // Verify if current_problem_id belongs to the active contest
-    if (currentProblemId) {
-      const verifyContest = await db.query(
-        "SELECT contest_id FROM problems WHERE id = $1",
-        [currentProblemId]
-      );
-      if (verifyContest.rows.length === 0 || verifyContest.rows[0].contest_id !== contestId) {
-        // Reset to the first problem of the active contest
-        const firstProblemResult = await db.query(
-          'SELECT id FROM problems WHERE contest_id = $1 ORDER BY order_index ASC LIMIT 1',
-          [contestId]
-        );
-        if (firstProblemResult.rows.length > 0) {
-          currentProblemId = firstProblemResult.rows[0].id;
-          await db.query(
-            'UPDATE participant_status SET current_problem_id = $1 WHERE participant_id = $2',
-            [currentProblemId, participantId]
-          );
-        } else {
-          currentProblemId = null;
         }
       }
     }
