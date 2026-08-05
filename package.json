@@ -5,7 +5,7 @@
     "server": "npm --prefix server run dev",
     "client": "npm --prefix client run dev",
     "admin": "npm --prefix admin run dev",
-    "dev": "concurrently -n SERVER,CLIENT,ADMIN -c blue,green,yellow \"npm run server\" \"npm run client\" \"npm run admin\""
+    "dev": "concurrently -n SERVER,CLIENT,ADMIN -c blue,green,yellow \"npm run server\" \"npm run client -- --expose\" \"npm run admin -- --expose\""
   },
   "devDependencies": {
     "concurrently": "^9.0.1"
