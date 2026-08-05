@@ -11,12 +11,23 @@ export async function getAllContests(req, res) {
   }
 }
 
-// Get the currently active/paused contest (Participant access)
+// Get the currently active/paused/ready contest (Participant access)
 export async function getActiveContest(req, res) {
   try {
-    // Select the contest that is active or paused. If multiple, get the most recent active one
+    // Select the contest that is active, paused, or ready. Priority: active > paused > ready
     const result = await db.query(
-      "SELECT id, title, description, status, start_time, duration_minutes, elapsed_seconds FROM contests WHERE status IN ('active', 'paused') ORDER BY start_time DESC LIMIT 1"
+      `SELECT id, title, description, status, start_time, duration_minutes, elapsed_seconds 
+       FROM contests 
+       WHERE status IN ('active', 'paused', 'ready') 
+       ORDER BY 
+         CASE status 
+           WHEN 'active' THEN 1 
+           WHEN 'paused' THEN 2 
+           WHEN 'ready' THEN 3 
+           ELSE 4 
+         END, 
+         created_at DESC 
+       LIMIT 1`
     );
     if (result.rows.length === 0) {
       return res.json({ contest: null });
@@ -114,6 +125,20 @@ export async function updateContestStatus(req, res) {
     }
 
     const currentContest = check.rows[0];
+
+    // Reject activation if another contest is already active or paused
+    if (['active', 'paused'].includes(status)) {
+      const activeCheck = await db.query(
+        "SELECT id, title FROM contests WHERE status IN ('active', 'paused') AND id != $1 LIMIT 1",
+        [id]
+      );
+      if (activeCheck.rows.length > 0) {
+        return res.status(400).json({
+          error: `Cannot activate/pause. Contest "${activeCheck.rows[0].title}" is currently active or paused. End or reset it first.`
+        });
+      }
+    }
+
     let newElapsed = parseInt(currentContest.elapsed_seconds, 10) || 0;
 
     // If currently active and transitioning out of active (e.g. to paused or ended),

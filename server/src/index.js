@@ -128,30 +128,45 @@ const activeConnections = new Map(); // userId -> Set of socketIds
 io.on('connection', async (socket) => {
   console.log(`Socket connected: ${socket.id} (Authenticated: ${!!socket.user})`);
 
-  // Mark participant online in database
+  // Mark participant online in database & enforce single active tab per participant
   if (socket.user && socket.user.role === 'participant') {
     const userId = socket.user.id;
-    if (!activeConnections.has(userId)) {
-      activeConnections.set(userId, new Set());
-    }
-    activeConnections.get(userId).add(socket.id);
+    let existingSockets = activeConnections.get(userId);
 
-    // Only update DB and broadcast ONCE (when the first tab connects)
-    if (activeConnections.get(userId).size === 1) {
-      try {
-        await db.query(
-          "UPDATE participant_status SET is_online = TRUE, last_active_at = CURRENT_TIMESTAMP WHERE participant_id = $1",
-          [userId]
-        );
-        // Broadcast online status change to admin room
-        io.to('admin_room').emit('participant_status_changed', {
-          id: userId,
-          username: socket.user.username,
-          is_online: true
-        });
-      } catch (err) {
-        console.error('Error marking participant online:', err);
+    if (existingSockets) {
+      // Clean up any stale sockets that have already disconnected
+      for (const socketId of Array.from(existingSockets)) {
+        const activeSock = io.sockets.sockets.get(socketId);
+        if (!activeSock || !activeSock.connected) {
+          existingSockets.delete(socketId);
+        }
       }
+    }
+
+    if (existingSockets && existingSockets.size >= 1) {
+      console.log(`Rejecting multi-tab connection for user ${userId} on socket ${socket.id}`);
+      socket.emit('multiple_tabs_error', {
+        message: 'Only one active tab is allowed per participant account.'
+      });
+      socket.disconnect(true);
+      return;
+    }
+
+    activeConnections.set(userId, new Set([socket.id]));
+
+    try {
+      await db.query(
+        "UPDATE participant_status SET is_online = TRUE, last_active_at = CURRENT_TIMESTAMP WHERE participant_id = $1",
+        [userId]
+      );
+      // Broadcast online status change to admin room
+      io.to('admin_room').emit('participant_status_changed', {
+        id: userId,
+        username: socket.user.username,
+        is_online: true
+      });
+    } catch (err) {
+      console.error('Error marking participant online:', err);
     }
   }
 

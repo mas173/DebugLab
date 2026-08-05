@@ -18,15 +18,23 @@ export async function getSystemStats(req, res) {
     const onlineParticipants = onlineUsersRes.rows[0].count;
 
     // Total submissions
-    const totalSubmissionsRes = await db.query(
-      "SELECT COUNT(*)::integer as count FROM submissions"
-    );
+    let totalSubmissionsQuery = "SELECT COUNT(*)::integer as count FROM submissions";
+    let totalSubmissionsParams = [];
+    if (contestId) {
+      totalSubmissionsQuery = "SELECT COUNT(*)::integer as count FROM submissions s JOIN problems p ON s.problem_id = p.id WHERE p.contest_id = $1";
+      totalSubmissionsParams = [contestId];
+    }
+    const totalSubmissionsRes = await db.query(totalSubmissionsQuery, totalSubmissionsParams);
     const totalSubmissions = totalSubmissionsRes.rows[0].count;
 
     // Submissions breakdown
-    const breakdownRes = await db.query(
-      "SELECT status, COUNT(*)::integer as count FROM submissions GROUP BY status"
-    );
+    let breakdownQuery = "SELECT status, COUNT(*)::integer as count FROM submissions GROUP BY status";
+    let breakdownParams = [];
+    if (contestId) {
+      breakdownQuery = "SELECT s.status, COUNT(*)::integer as count FROM submissions s JOIN problems p ON s.problem_id = p.id WHERE p.contest_id = $1 GROUP BY s.status";
+      breakdownParams = [contestId];
+    }
+    const breakdownRes = await db.query(breakdownQuery, breakdownParams);
     const breakdown = breakdownRes.rows.reduce((acc, row) => {
       acc[row.status] = row.count;
       return acc;

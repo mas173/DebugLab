@@ -28,6 +28,7 @@ export default function Dashboard() {
   const [consoleLogs, setConsoleLogs] = useState('Console initialized. Ready to debug.\n');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [verdict, setVerdict] = useState(null);
+  const [isMultiTabBlocked, setIsMultiTabBlocked] = useState(false);
   const [lastSubmissionStats, setLastSubmissionStats] = useState(null); // { passed, total, status }
   const [saveStatus, setSaveStatus] = useState('Saved'); // 'Saved' | 'Saving...' | 'Error'
   const [leftTab, setLeftTab] = useState('description'); // 'description' | 'history'
@@ -130,7 +131,7 @@ export default function Dashboard() {
     if (selectedProblem?.id === prob.id) return;
 
     // Save current draft before switching if dirty
-    if (saveTimeoutRef.current) {
+    if (saveTimeoutRef.current && selectedProblem?.id) {
       clearTimeout(saveTimeoutRef.current);
       axios.post('/api/problems/draft', {
         problemId: selectedProblem.id,
@@ -209,8 +210,13 @@ export default function Dashboard() {
       }
     });
 
+    socket.on('multiple_tabs_error', () => {
+      setIsMultiTabBlocked(true);
+    });
+
     return () => {
       socket.off('contest_status_changed');
+      socket.off('multiple_tabs_error');
     };
   }, [socket]);
 
@@ -218,7 +224,8 @@ export default function Dashboard() {
   const handleKeyDown = (e) => {
     // Intercept keyboard event for copy (Ctrl+C), paste (Ctrl+V), cut (Ctrl+X)
     if (e.ctrlKey || e.metaKey) {
-      if (e.key === 'c' || e.key === 'v' || e.key === 'x') {
+      const key = e.key ? e.key.toLowerCase() : '';
+      if (key === 'c' || key === 'v' || key === 'x') {
         e.preventDefault();
         e.stopPropagation();
         toast.error('Copy, Paste, and Cut are disabled in this contest.', {
@@ -316,6 +323,39 @@ export default function Dashboard() {
   }
 
   // Blocker views
+  if (isMultiTabBlocked) {
+    return (
+      <div className="relative flex min-h-screen flex-col bg-black text-white">
+        <header className="flex justify-between items-center px-8 py-4 border-b border-slate-900 bg-slate-950/40">
+          <h1 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+            DebugLab Workspace
+          </h1>
+          <button
+            onClick={logout}
+            className="flex items-center gap-2 rounded-lg bg-slate-950 border border-slate-900 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900 transition hover:text-white"
+          >
+            <LogOut size={16} />
+            Sign Out
+          </button>
+        </header>
+
+        <main className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-lg mx-auto">
+          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-950/50 border border-red-500/20 text-red-400 shadow-[0_0_20px_rgba(239,68,68,0.1)]">
+            <Lock size={32} className="animate-pulse" />
+          </div>
+          <span className="text-xs font-mono font-bold tracking-widest text-red-400 uppercase mb-1">Access Restricted</span>
+          <h2 className="text-3xl font-extrabold text-white tracking-tight mb-3">Multiple Tabs Blocked</h2>
+          <p className="text-slate-400 mb-6 text-sm leading-relaxed">
+            You already have an active contest session open in another browser tab. For contest integrity, only one tab is allowed at a time.
+          </p>
+          <div className="rounded-lg border border-slate-900 bg-slate-950/60 p-4 text-xs text-slate-500 font-mono">
+            Please close this tab and return to your primary session, or sign out.
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   if (!contest) {
     return (
       <div className="relative flex min-h-screen flex-col bg-black text-white">
@@ -348,6 +388,45 @@ export default function Dashboard() {
     );
   }
 
+  if (['ready', 'draft'].includes(contest.status)) {
+    return (
+      <div className="relative flex min-h-screen flex-col bg-black text-white">
+        <header className="flex justify-between items-center px-8 py-4 border-b border-slate-900 bg-slate-950/40">
+          <div className="flex items-center gap-4">
+            <h1 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+              DebugLab Workspace
+            </h1>
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+              <Clock size={12} /> UPCOMING CONTEST
+            </span>
+          </div>
+          <button
+            onClick={logout}
+            className="flex items-center gap-2 rounded-lg bg-slate-950 border border-slate-900 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900 transition hover:text-white"
+          >
+            <LogOut size={16} />
+            Sign Out
+          </button>
+        </header>
+
+        <main className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-lg mx-auto">
+          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.1)]">
+            <Clock size={32} className="animate-pulse" />
+          </div>
+          <span className="text-xs font-mono font-bold tracking-widest text-cyan-400 uppercase mb-1">Upcoming Session</span>
+          <h2 className="text-3xl font-extrabold text-white tracking-tight mb-3">{contest.title}</h2>
+          <p className="text-slate-400 mb-6 text-sm leading-relaxed">
+            {contest.description || 'This contest is prepared and will begin shortly when the administrator activates the session.'}
+          </p>
+          <div className="rounded-lg border border-slate-900 bg-slate-950/60 p-4 text-xs text-slate-400 font-mono space-y-1">
+            <p className="text-cyan-400 font-bold">Duration: {contest.duration_minutes} minutes</p>
+            <p className="text-slate-500">Keep this window open. The workspace will unlock automatically when the contest begins.</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   if (contest.status === 'paused') {
     return (
       <div className="relative flex min-h-screen flex-col bg-black text-white">
@@ -373,7 +452,8 @@ export default function Dashboard() {
           <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-950/50 border border-amber-500/20 text-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.1)]">
             <ShieldAlert size={32} className="animate-bounce" />
           </div>
-          <h2 className="text-3xl font-extrabold text-white tracking-tight mb-3">Contest Paused</h2>
+          <span className="text-xs font-mono font-bold tracking-widest text-amber-400 uppercase mb-1">Contest Paused</span>
+          <h2 className="text-3xl font-extrabold text-white tracking-tight mb-3">{contest.title}</h2>
           <p className="text-slate-400 mb-6 text-sm leading-relaxed">
             The administrators have temporarily paused the contest session. Editor inputs are locked and code execution is suspended.
           </p>
@@ -411,7 +491,8 @@ export default function Dashboard() {
           <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.1)]">
             <Award size={32} />
           </div>
-          <h2 className="text-3xl font-extrabold text-white tracking-tight mb-3">Contest Finished</h2>
+          <span className="text-xs font-mono font-bold tracking-widest text-red-400 uppercase mb-1">Contest Concluded</span>
+          <h2 className="text-3xl font-extrabold text-white tracking-tight mb-3">{contest.title}</h2>
           <p className="text-slate-400 mb-6 text-sm leading-relaxed">
             The contest has concluded. Submissions are closed. Ranks are locking.
           </p>
@@ -428,11 +509,11 @@ export default function Dashboard() {
     <div className="flex h-screen flex-col bg-black text-white overflow-hidden">
       {/* Top Navbar */}
       <header className="flex justify-between items-center px-8 h-16 border-b border-white/[0.05] bg-slate-900/40 backdrop-blur-md shrink-0 shadow-[0_4px_30px_rgba(0,0,0,0.3)] z-10">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-black bg-gradient-to-r from-white via-slate-100 to-cyan-400 bg-clip-text text-transparent">
-            DebugLab Workspace
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-black bg-gradient-to-r from-white via-slate-100 to-cyan-400 bg-clip-text text-transparent truncate max-w-sm" title={contest?.title}>
+            {contest?.title || 'DebugLab Workspace'}
           </h1>
-          <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 uppercase tracking-wider">
+          <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 uppercase tracking-wider shrink-0">
             Active
           </span>
         </div>

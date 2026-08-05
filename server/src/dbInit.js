@@ -38,10 +38,12 @@ async function initializeDatabase() {
     if (participantCheck.rows.length === 0) {
       console.log('No participant user found. Creating default participant USER-101...');
       const defaultParticipantHash = await bcrypt.hash('userpassword', 10);
-      await db.query(
-        'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)',
+      const participantRes = await db.query(
+        'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id',
         ['USER-101', defaultParticipantHash, 'participant']
       );
+      const participantId = participantRes.rows[0].id;
+      await db.query('INSERT INTO participant_status (participant_id) VALUES ($1)', [participantId]);
       console.log('Default participant created: Username: "USER-101", Password: "userpassword"');
     }
   } catch (error) {
