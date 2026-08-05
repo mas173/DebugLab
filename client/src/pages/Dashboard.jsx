@@ -5,7 +5,9 @@ import Editor from '@monaco-editor/react';
 import axios from 'axios';
 import {
   LogOut, Play, Pause, Award, Clock, Code2, ShieldAlert, AlertCircle,
-  Terminal, PlayCircle, Send, CheckCircle, RefreshCcw, Lock
+  Terminal, PlayCircle, Send, CheckCircle, RefreshCcw, Lock, Zap, Sparkles, Flame,
+  BugPlay,
+  PartyPopper
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -390,37 +392,70 @@ export default function Dashboard() {
 
   if (['ready', 'draft'].includes(contest.status)) {
     return (
-      <div className="relative flex min-h-screen flex-col bg-black text-white">
-        <header className="flex justify-between items-center px-8 py-4 border-b border-slate-900 bg-slate-950/40">
+      <div className="relative flex min-h-screen flex-col bg-slate-950 text-white overflow-hidden selection:bg-cyan-500 selection:text-black">
+        {/* Dynamic Animated Ambient Background Orbs (Cyber Cyan & Electric Blue) */}
+        <div className="pointer-events-none absolute -top-40 -left-40 h-[500px] w-[500px] rounded-full bg-cyan-500/20 blur-[130px] animate-pulse" />
+        <div className="pointer-events-none absolute -bottom-40 -right-40 h-[500px] w-[500px] rounded-full bg-blue-600/20 blur-[130px] animate-pulse duration-[6000ms]" />
+        <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[600px] w-[600px] rounded-full bg-purple-600/10 blur-[160px] animate-pulse duration-[6000ms]" />
+
+        {/* Cyber Grid Background Pattern Overlay */}
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#1e293b15_1px,transparent_1px),linear-gradient(to_bottom,#1e293b15_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
+
+        {/* Header */}
+        <header className="relative z-10 flex justify-between items-center px-8 py-4 border-b border-cyan-500/20 bg-slate-950/60 backdrop-blur-xl">
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
               DebugLab Workspace
             </h1>
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
-              <Clock size={12} /> UPCOMING CONTEST
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+              <Zap size={12} className="animate-bounce text-cyan-400" /> UPCOMING SESSION
             </span>
           </div>
           <button
             onClick={logout}
-            className="flex items-center gap-2 rounded-lg bg-slate-950 border border-slate-900 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900 transition hover:text-white"
+            className="flex items-center gap-2 rounded-xl bg-slate-900/80 border border-slate-800 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 transition hover:text-white backdrop-blur-md"
           >
             <LogOut size={16} />
             Sign Out
           </button>
         </header>
 
-        <main className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-lg mx-auto">
-          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.1)]">
-            <Clock size={32} className="animate-pulse" />
-          </div>
-          <span className="text-xs font-mono font-bold tracking-widest text-cyan-400 uppercase mb-1">Upcoming Session</span>
-          <h2 className="text-3xl font-extrabold text-white tracking-tight mb-3">{contest.title}</h2>
-          <p className="text-slate-400 mb-6 text-sm leading-relaxed">
-            {contest.description || 'This contest is prepared and will begin shortly when the administrator activates the session.'}
-          </p>
-          <div className="rounded-lg border border-slate-900 bg-slate-950/60 p-4 text-xs text-slate-400 font-mono space-y-1">
-            <p className="text-cyan-400 font-bold">Duration: {contest.duration_minutes} minutes</p>
-            <p className="text-slate-500">Keep this window open. The workspace will unlock automatically when the contest begins.</p>
+        {/* Main Content (Glassmorphism Motivational Card) */}
+        <main className="relative z-10 flex-1 flex flex-col items-center justify-center p-6 text-center max-w-xl mx-auto">
+          <div className="w-full backdrop-blur-2xl bg-slate-900/60 border border-cyan-500/20 shadow-[0_0_60px_rgba(6,182,212,0.15)] rounded-3xl p-8 space-y-6">
+
+            {/* Glowing Animated Icon Container */}
+            <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
+              <div className="absolute inset-0 rounded-2xl bg-cyan-500/30 blur-xl animate-pulse duration-[3000ms]" />
+              <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-950 border border-cyan-400/50 text-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.3)]">
+                <BugPlay size={36} className="animate-pulse duration-[9000ms]" />
+              </div>
+            </div>
+
+            <div>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-extrabold uppercase tracking-widest bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.2)] mb-3">
+                ⚡ GEAR UP & CONQUER
+              </span>
+              <h2 className="text-3xl font-black bg-gradient-to-r from-white via-cyan-100 to-cyan-400 bg-clip-text text-transparent tracking-tight">
+                {contest.title}
+              </h2>
+            </div>
+
+            <p className="text-slate-300 text-sm leading-relaxed max-w-md mx-auto font-sans">
+              {contest.description || 'The arena is set. Sharpen your logic, double-check your syntax, and prepare to conquer the debugging challenges ahead!'}
+            </p>
+
+            {/* Motivational Banner */}
+            <div className="rounded-2xl border border-cyan-500/30 bg-cyan-950/30 p-4 text-sm font-mono text-cyan-300 space-y-2 backdrop-blur-md">
+              <div className="flex items-center justify-center gap-2 font-bold text-cyan-400">
+                <Flame size={14} className="text-amber-400 animate-pulse" />
+                <span>Session Duration: {contest.duration_minutes} Minutes</span>
+              </div>
+              <p className="text-sm text-slate-400 font-sans">
+                💡 <span className="font-semibold text-slate-300">Pro-Tip:</span> Read the problem constraints carefully & inspect edge cases. The workspace unlocks automatically when the contest begins.
+              </p>
+            </div>
+
           </div>
         </main>
       </div>
@@ -429,37 +464,70 @@ export default function Dashboard() {
 
   if (contest.status === 'paused') {
     return (
-      <div className="relative flex min-h-screen flex-col bg-black text-white">
-        <header className="flex justify-between items-center px-8 py-4 border-b border-slate-900 bg-slate-950/40">
+      <div className="relative flex min-h-screen flex-col bg-slate-950 text-white overflow-hidden selection:bg-amber-500 selection:text-black">
+        {/* Dynamic Animated Ambient Background Orbs (Warm Amber Gold & Flame Orange) */}
+        <div className="pointer-events-none absolute -top-40 -right-40 h-[500px] w-[500px] rounded-full bg-amber-500/20 blur-[130px] animate-pulse" />
+        <div className="pointer-events-none absolute -bottom-40 -left-40 h-[500px] w-[500px] rounded-full bg-orange-600/20 blur-[130px] animate-pulse duration-[4000ms]" />
+        <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[600px] w-[600px] rounded-full bg-yellow-500/10 blur-[160px] animate-pulse duration-[6000ms]" />
+
+        {/* Grid Background Pattern Overlay */}
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#1e293b15_1px,transparent_1px),linear-gradient(to_bottom,#1e293b15_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
+
+        {/* Header */}
+        <header className="relative z-10 flex justify-between items-center px-8 py-4 border-b border-amber-500/20 bg-slate-950/60 backdrop-blur-xl">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+            <h1 className="text-xl font-bold bg-gradient-to-r from-white via-slate-100 to-amber-400 bg-clip-text text-transparent">
               DebugLab Workspace
             </h1>
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 border border-amber-500/30 text-amber-400">
-              <Pause size={12} /> PAUSED
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 border border-amber-500/30 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+              <Pause size={12} className="animate-pulse" /> CONTEST PAUSED
             </span>
           </div>
           <button
             onClick={logout}
-            className="flex items-center gap-2 rounded-lg bg-slate-950 border border-slate-900 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900 transition hover:text-white"
+            className="flex items-center gap-2 rounded-xl bg-slate-900/80 border border-slate-800 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 transition hover:text-white backdrop-blur-md"
           >
             <LogOut size={16} />
             Sign Out
           </button>
         </header>
 
-        <main className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-lg mx-auto">
-          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-950/50 border border-amber-500/20 text-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.1)]">
-            <ShieldAlert size={32} className="animate-bounce" />
-          </div>
-          <span className="text-xs font-mono font-bold tracking-widest text-amber-400 uppercase mb-1">Contest Paused</span>
-          <h2 className="text-3xl font-extrabold text-white tracking-tight mb-3">{contest.title}</h2>
-          <p className="text-slate-400 mb-6 text-sm leading-relaxed">
-            The administrators have temporarily paused the contest session. Editor inputs are locked and code execution is suspended.
-          </p>
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-500 px-4 py-2.5 bg-slate-950 border border-slate-900 rounded-lg">
-            <Clock size={14} className="text-amber-400" />
-            <span>Time Remaining Saved: {formatTime(timeRemaining)}</span>
+        {/* Main Content (Glassmorphism Intermission Card) */}
+        <main className="relative z-10 flex-1 flex flex-col items-center justify-center p-6 text-center max-w-xl mx-auto">
+          <div className="w-full backdrop-blur-2xl bg-slate-900/60 border border-amber-500/20 shadow-[0_0_60px_rgba(245,158,11,0.15)] rounded-3xl p-8 space-y-6">
+
+            {/* Glowing Icon Container */}
+            <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
+              <div className="absolute inset-0 rounded-2xl bg-amber-500/30 blur-xl animate-pulse duration-[6000ms]" />
+              <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-950 border border-amber-400/50 text-amber-400 shadow-[0_0_30px_rgba(245,158,11,0.3)]">
+                <ShieldAlert size={36} className="animate-pulse duration-[6000ms]" />
+              </div>
+            </div>
+
+            <div>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-extrabold uppercase tracking-widest bg-amber-500/10 border border-amber-500/30 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)] mb-3">
+                ⏸ INTERMISSION - REFLECT & RECHARGE
+              </span>
+              <h2 className="text-3xl font-black bg-gradient-to-r from-white via-amber-100 to-amber-400 bg-clip-text text-transparent tracking-tight">
+                {contest.title}
+              </h2>
+            </div>
+
+            <p className="text-slate-300 text-sm leading-relaxed max-w-md mx-auto font-sans">
+              The contest session is temporarily paused by the administrators. Take a deep breath, stretch, and mentally review your algorithm strategy for when the workspace unlocks!
+            </p>
+
+            {/* Time Saved & Mindset Banner */}
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-950/30 p-4 text-sm font-mono text-amber-300 space-y-2 backdrop-blur-md">
+              <div className="flex items-center justify-center gap-2 font-bold text-amber-400">
+                <Clock size={14} className="text-amber-400 animate-pulse" />
+                <span>Saved Remaining Time: {formatTime(timeRemaining)}</span>
+              </div>
+              <p className="text-sm text-slate-400 font-sans">
+                <span className="font-semibold text-slate-300">Mindset Tip:</span> Use this moment to outline your pointers, array boundaries, or logic steps on paper. Code execution resumes immediately once active.
+              </p>
+            </div>
+
           </div>
         </main>
       </div>
@@ -468,36 +536,70 @@ export default function Dashboard() {
 
   if (contest.status === 'ended') {
     return (
-      <div className="relative flex min-h-screen flex-col bg-black text-white">
-        <header className="flex justify-between items-center px-8 py-4 border-b border-slate-900 bg-slate-950/40">
+      <div className="relative flex min-h-screen flex-col bg-slate-950 text-white overflow-hidden selection:bg-emerald-500 selection:text-black">
+        {/* Dynamic Animated Ambient Background Orbs (Victory Emerald, Trophy Gold & Cyber Teal) */}
+        <div className="pointer-events-none absolute -top-40 -left-40 h-[500px] w-[500px] rounded-full bg-emerald-500/20 blur-[130px] animate-pulse" />
+        <div className="pointer-events-none absolute -bottom-40 -right-40 h-[500px] w-[500px] rounded-full bg-teal-600/20 blur-[130px] animate-pulse duration-[4000ms]" />
+        <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[600px] w-[600px] rounded-full bg-amber-500/10 blur-[160px] animate-pulse duration-[6000ms]" />
+
+        {/* Cyber Grid Background Pattern Overlay */}
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#1e293b15_1px,transparent_1px),linear-gradient(to_bottom,#1e293b15_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
+
+        {/* Header */}
+        <header className="relative z-10 flex justify-between items-center px-8 py-4 border-b border-emerald-500/20 bg-slate-950/60 backdrop-blur-xl">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+            <h1 className="text-xl font-bold bg-gradient-to-r from-white via-slate-100 to-emerald-400 bg-clip-text text-transparent">
               DebugLab Workspace
             </h1>
-            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-500/10 border border-red-500/30 text-red-400">
-              FINISHED
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+              <Award size={12} className="animate-bounce" /> CONTEST FINISHED
             </span>
           </div>
           <button
             onClick={logout}
-            className="flex items-center gap-2 rounded-lg bg-slate-950 border border-slate-900 px-4 py-2 text-sm text-slate-300 hover:bg-slate-900 transition hover:text-white"
+            className="flex items-center gap-2 rounded-xl bg-slate-900/80 border border-slate-800 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 transition hover:text-white backdrop-blur-md"
           >
             <LogOut size={16} />
             Sign Out
           </button>
         </header>
 
-        <main className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-lg mx-auto">
-          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.1)]">
-            <Award size={32} />
-          </div>
-          <span className="text-xs font-mono font-bold tracking-widest text-red-400 uppercase mb-1">Contest Concluded</span>
-          <h2 className="text-3xl font-extrabold text-white tracking-tight mb-3">{contest.title}</h2>
-          <p className="text-slate-400 mb-6 text-sm leading-relaxed">
-            The contest has concluded. Submissions are closed. Ranks are locking.
-          </p>
-          <div className="rounded-lg border border-slate-900 bg-slate-950/60 p-4 text-xs text-cyan-500 font-mono">
-            Thank you for participating!
+        {/* Main Content (Glassmorphism Victory Card) */}
+        <main className="relative z-10 flex-1 flex flex-col items-center justify-center p-6 text-center max-w-xl mx-auto">
+          <div className="w-full backdrop-blur-2xl bg-slate-900/60 border border-emerald-500/20 shadow-[0_0_60px_rgba(16,185,129,0.15)] rounded-3xl p-8 space-y-6">
+
+            {/* Glowing Icon Container */}
+            <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
+              <div className="absolute inset-0 rounded-2xl bg-emerald-500/30 blur-xl animate-pulse duration-[2000ms]" />
+              <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-950 border border-emerald-400/50 text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
+                <Award size={36} className="animate-bounce" />
+              </div>
+            </div>
+
+            <div>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-extrabold uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)] mb-3">
+                <PartyPopper size={12} /> CONTEST CONCLUDED - MISSION ACCOMPLISHED
+              </span>
+              <h2 className="text-3xl font-black bg-gradient-to-r from-white via-emerald-100 to-emerald-400 bg-clip-text text-transparent tracking-tight">
+                {contest.title}
+              </h2>
+            </div>
+
+            <p className="text-slate-300 text-sm leading-relaxed max-w-md mx-auto font-sans">
+              Congratulations on pushing your limits! Submissions are now closed and final score evaluations are locked. Outstanding effort battling through the debugging challenges today!
+            </p>
+
+            {/* Gratitude & Results Banner */}
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/30 p-4 text-sm font-mono text-emerald-300 space-y-2 backdrop-blur-md">
+              <div className="flex items-center justify-center gap-2 font-bold text-emerald-400">
+                <Sparkles size={14} className="text-emerald-400 animate-pulse" />
+                <span>Thank You For Participating!</span>
+              </div>
+              <p className="text-sm text-slate-400 font-sans">
+                Official standings and final leaderboard positions will be declared by the contest administrators.
+              </p>
+            </div>
+
           </div>
         </main>
       </div>
@@ -519,15 +621,13 @@ export default function Dashboard() {
         </div>
 
         {/* Timer */}
-        <div className={`flex items-center gap-3 rounded-xl border px-4 py-2 shadow-inner ${
-          contest?.status === 'paused'
-            ? 'border-amber-500/30 bg-amber-500/10'
-            : 'border-white/[0.08] bg-white/[0.02]'
-        }`}>
-          <Clock size={14} className={contest?.status === 'active' ? 'text-cyan-400 animate-pulse' : 'text-amber-400'} />
-          <span className={`font-mono text-sm font-black tracking-wider ${
-            contest?.status === 'paused' ? 'text-amber-400' : 'text-white'
+        <div className={`flex items-center gap-3 rounded-xl border px-4 py-2 shadow-inner ${contest?.status === 'paused'
+          ? 'border-amber-500/30 bg-amber-500/10'
+          : 'border-white/[0.08] bg-white/[0.02]'
           }`}>
+          <Clock size={14} className={contest?.status === 'active' ? 'text-cyan-400 animate-pulse' : 'text-amber-400'} />
+          <span className={`font-mono text-sm font-black tracking-wider ${contest?.status === 'paused' ? 'text-amber-400' : 'text-white'
+            }`}>
             {formatTime(timeRemaining)} {contest?.status === 'paused' && '(PAUSED)'}
           </span>
         </div>
@@ -731,13 +831,12 @@ export default function Dashboard() {
                   Execution Console
                 </span>
                 {lastSubmissionStats && (
-                  <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded border transition-all ${
-                    lastSubmissionStats.status === 'accepted'
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                      : lastSubmissionStats.status === 'compile_error'
+                  <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded border transition-all ${lastSubmissionStats.status === 'accepted'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                    : lastSubmissionStats.status === 'compile_error'
                       ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
                       : 'bg-red-500/10 border-red-500/30 text-red-400'
-                  }`}>
+                    }`}>
                     Passed: {lastSubmissionStats.passed}/{lastSubmissionStats.total} Cases
                   </span>
                 )}
