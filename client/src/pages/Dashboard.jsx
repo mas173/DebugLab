@@ -30,21 +30,11 @@ export default function Dashboard() {
   const [verdict, setVerdict] = useState(null);
   const [lastSubmissionStats, setLastSubmissionStats] = useState(null); // { passed, total, status }
   const [saveStatus, setSaveStatus] = useState('Saved'); // 'Saved' | 'Saving...' | 'Error'
-  const [leftTab, setLeftTab] = useState('description'); // 'description' | 'history' | 'leaderboard'
+  const [leftTab, setLeftTab] = useState('description'); // 'description' | 'history'
   const [historySubmissions, setHistorySubmissions] = useState([]);
-  const [leaderboardList, setLeaderboardList] = useState([]);
 
   const saveTimeoutRef = useRef(null);
 
-  const fetchLeaderboard = async () => {
-    try {
-      const url = contest?.id ? `/api/leaderboard?contestId=${contest.id}` : '/api/leaderboard';
-      const res = await axios.get(url);
-      setLeaderboardList(res.data.leaderboard || []);
-    } catch (err) {
-      console.error('Error fetching leaderboard:', err);
-    }
-  };
 
   const loadSubmissionHistory = async (problemId) => {
     try {
@@ -77,7 +67,6 @@ export default function Dashboard() {
             loadSubmissionHistory(target.id);
             return target;
           });
-          fetchLeaderboard();
         }
       } else {
         setContest(null);
@@ -220,14 +209,8 @@ export default function Dashboard() {
       }
     });
 
-    socket.on('leaderboard_dirty', () => {
-      console.log('Leaderboard is dirty, reloading standings...');
-      fetchLeaderboard();
-    });
-
     return () => {
       socket.off('contest_status_changed');
-      socket.off('leaderboard_dirty');
     };
   }, [socket]);
 
@@ -535,18 +518,6 @@ export default function Dashboard() {
             >
               Attempts ({historySubmissions.length})
             </button>
-            <button
-              onClick={() => {
-                setLeftTab('leaderboard');
-                fetchLeaderboard();
-              }}
-              className={`flex-1 text-center py-3.5 text-xs uppercase tracking-wider font-bold border-b-2 transition duration-300 ${leftTab === 'leaderboard'
-                ? 'border-cyan-500 text-cyan-400 bg-cyan-500/[0.02]'
-                : 'border-transparent text-slate-500 hover:text-slate-300'
-                }`}
-            >
-              Standings
-            </button>
           </div>
 
           {/* Problem Statement, Submission History or Leaderboard */}
@@ -573,7 +544,7 @@ export default function Dashboard() {
                   {selectedProblem.description}
                 </div>
               </div>
-            ) : leftTab === 'history' ? (
+            ) : (
               <div className="theme-scrollbar flex-1 min-h-0 p-6 overflow-y-auto space-y-4">
                 <h4 className="font-bold text-sm text-slate-200">Submission History</h4>
                 {historySubmissions.length === 0 ? (
@@ -611,64 +582,6 @@ export default function Dashboard() {
                           >
                             Load Code
                           </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="theme-scrollbar flex-1 min-h-0 p-6 overflow-y-auto space-y-4">
-                <h4 className="font-bold text-sm text-slate-200">Real-Time Standings</h4>
-                {leaderboardList.length === 0 ? (
-                  <p className="text-xs text-slate-600 py-4 text-center">No participants recorded yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-12 text-[10px] uppercase font-mono text-slate-500 border-b border-slate-900 pb-2 px-1">
-                      <span className="col-span-2">Rank</span>
-                      <span className="col-span-4">User</span>
-                      <span className="col-span-2 text-center">Solved</span>
-                      <span className="col-span-2 text-right">Score</span>
-                      <span className="col-span-2 text-right">Time</span>
-                    </div>
-                    {leaderboardList.map((lb) => {
-                      const isMe = lb.participant_id === user.id;
-                      const isTop3 = lb.rank <= 3;
-                      return (
-                        <div
-                          key={lb.participant_id}
-                          className={`grid grid-cols-12 items-center py-2.5 px-2 rounded text-xs transition ${isMe
-                            ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400'
-                            : 'border border-transparent bg-slate-950/40 text-slate-300'
-                            }`}
-                        >
-                          <span className="col-span-2 font-mono font-bold flex items-center gap-1">
-                            {isTop3 ? (
-                              <span className={
-                                lb.rank === 1 ? 'text-yellow-500' :
-                                  lb.rank === 2 ? 'text-slate-400' :
-                                    'text-amber-600'
-                              }>
-                                🏆{lb.rank}
-                              </span>
-                            ) : (
-                              <span>{lb.rank}</span>
-                            )}
-                          </span>
-                          <span className="col-span-4 font-semibold truncate" title={lb.username}>
-                            {lb.username} {isMe && '(You)'}
-                          </span>
-                          <span className="col-span-2 text-center font-mono font-bold">
-                            {lb.problems_solved}
-                          </span>
-                          <span className="col-span-2 text-right font-mono font-bold text-white">
-                            {lb.score} pts
-                          </span>
-                          <span className="col-span-2 text-right font-mono text-[10px] text-slate-500">
-                            {lb.last_accepted_time
-                              ? new Date(lb.last_accepted_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                              : '-'}
-                          </span>
                         </div>
                       );
                     })}

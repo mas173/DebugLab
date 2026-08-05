@@ -16,6 +16,10 @@ export async function getLeaderboard(req, res) {
       }
     }
 
+    if (!targetContestId) {
+      return res.json({ leaderboard: [], contestId: null });
+    }
+
     let queryText = `
       WITH distinct_solved AS (
         SELECT 

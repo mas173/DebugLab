@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
 import axios from 'axios';
@@ -52,10 +52,16 @@ export default function Dashboard() {
 
   // Leaderboard State
   const [leaderboardList, setLeaderboardList] = useState([]);
+  const selectedContestRef = useRef(selectedContest);
+
+  useEffect(() => {
+    selectedContestRef.current = selectedContest;
+  }, [selectedContest]);
 
   const fetchLeaderboard = async () => {
     try {
-      const url = selectedContest?.id ? `/api/leaderboard?contestId=${selectedContest.id}` : '/api/leaderboard';
+      const currentContestId = selectedContestRef.current?.id;
+      const url = currentContestId ? `/api/leaderboard?contestId=${currentContestId}` : '/api/leaderboard';
       const res = await axios.get(url);
       setLeaderboardList(res.data.leaderboard || []);
     } catch (err) {
@@ -228,8 +234,11 @@ export default function Dashboard() {
       const res = await axios.get('/api/contests');
       setContests(res.data.contests);
       if (res.data.contests.length > 0) {
-        // Default to the first/latest contest
-        setSelectedContest(res.data.contests[0]);
+        const savedId = localStorage.getItem('admin_selected_contest_id');
+        const matchedSaved = savedId ? res.data.contests.find(c => c.id === savedId) : null;
+        const activeContest = res.data.contests.find(c => c.status === 'active' || c.status === 'paused');
+        const defaultContest = matchedSaved || activeContest || res.data.contests[0];
+        setSelectedContest(defaultContest);
       }
     } catch (err) {
       console.error(err);
@@ -255,6 +264,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (selectedContest) {
+      localStorage.setItem('admin_selected_contest_id', selectedContest.id);
       fetchProblems(selectedContest.id);
     }
   }, [selectedContest]);
@@ -451,15 +461,15 @@ export default function Dashboard() {
 
     const testCasesToCreate = !editingProblem
       ? [
-          ...problemFormTestCases,
-          ...(hasPendingTestCase
-            ? [{
-                input: problemFormTcInput,
-                expected_output: problemFormTcOutput,
-                is_hidden: problemFormTcIsHidden
-              }]
-            : [])
-        ]
+        ...problemFormTestCases,
+        ...(hasPendingTestCase
+          ? [{
+            input: problemFormTcInput,
+            expected_output: problemFormTcOutput,
+            is_hidden: problemFormTcIsHidden
+          }]
+          : [])
+      ]
       : [];
 
     if (!editingProblem && testCasesToCreate.length === 0) {
@@ -730,8 +740,8 @@ export default function Dashboard() {
             <button
               onClick={() => setActiveTab('controls')}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition duration-300 border ${activeTab === 'controls'
-                  ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                  : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
+                ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
                 }`}
             >
               <Clock size={16} />
@@ -740,8 +750,8 @@ export default function Dashboard() {
             <button
               onClick={() => setActiveTab('problems')}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition duration-300 border ${activeTab === 'problems'
-                  ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                  : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
+                ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
                 }`}
             >
               <FileText size={16} />
@@ -750,8 +760,8 @@ export default function Dashboard() {
             <button
               onClick={() => setActiveTab('participants')}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition duration-300 border ${activeTab === 'participants'
-                  ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                  : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
+                ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
                 }`}
             >
               <Users size={16} />
@@ -760,8 +770,8 @@ export default function Dashboard() {
             <button
               onClick={() => setActiveTab('leaderboard')}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition duration-300 border ${activeTab === 'leaderboard'
-                  ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                  : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
+                ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
                 }`}
             >
               <Award size={16} />
@@ -846,9 +856,9 @@ export default function Dashboard() {
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-400 font-bold uppercase tracking-wider font-mono">Status:</span>
               <span className={`px-2.5 py-0.5 text-[10px] font-black rounded-lg uppercase tracking-wider border ${selectedContest.status === 'active' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
-                  selectedContest.status === 'paused' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' :
-                    selectedContest.status === 'ended' ? 'bg-red-500/10 border-red-500/30 text-red-400' :
-                      'bg-slate-800 border-slate-700 text-slate-400'
+                selectedContest.status === 'paused' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' :
+                  selectedContest.status === 'ended' ? 'bg-red-500/10 border-red-500/30 text-red-400' :
+                    'bg-slate-800 border-slate-700 text-slate-400'
                 }`}>
                 {selectedContest.status}
               </span>
@@ -889,13 +899,12 @@ export default function Dashboard() {
                     <p className="text-slate-400 text-sm">Transition the contest session lifecycle state in real-time.</p>
                   </div>
                   {selectedContest && (
-                    <div className={`flex items-center gap-3 px-4 py-2 rounded-xl border font-mono text-sm font-bold ${
-                      selectedContest.status === 'active'
+                    <div className={`flex items-center gap-3 px-4 py-2 rounded-xl border font-mono text-sm font-bold ${selectedContest.status === 'active'
                         ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
                         : selectedContest.status === 'paused'
-                        ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
-                        : 'border-slate-800 bg-slate-900 text-slate-400'
-                    }`}>
+                          ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                          : 'border-slate-800 bg-slate-900 text-slate-400'
+                      }`}>
                       <Clock size={16} className={selectedContest.status === 'active' ? 'animate-pulse text-emerald-400' : ''} />
                       <span>
                         {Math.floor(adminTimeRemaining / 60)}m {adminTimeRemaining % 60}s
@@ -1528,8 +1537,8 @@ export default function Dashboard() {
                           <td className="py-3.5 px-4">
                             <span className="flex items-center gap-2">
                               <span className={`h-2.5 w-2.5 rounded-full ${p.is_online
-                                  ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] animate-pulse'
-                                  : 'bg-slate-700'
+                                ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] animate-pulse'
+                                : 'bg-slate-700'
                                 }`} />
                               <span className={`text-xs font-semibold ${p.is_online ? 'text-emerald-400' : 'text-slate-500'}`}>
                                 {p.is_online ? 'Online' : 'Offline'}
@@ -1538,11 +1547,10 @@ export default function Dashboard() {
                           </td>
                           <td className="py-3.5 px-4 font-semibold text-slate-200">{p.username}</td>
                           <td className="py-3.5 px-4 text-xs">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
-                              p.role === 'admin'
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${p.role === 'admin'
                                 ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400'
                                 : 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400'
-                            }`}>
+                              }`}>
                               {p.role || 'participant'}
                             </span>
                           </td>
@@ -1645,8 +1653,8 @@ export default function Dashboard() {
                             <td className="py-3.5 px-4 font-mono font-bold">
                               {isTop3 ? (
                                 <span className={`flex items-center gap-1 text-sm ${row.rank === 1 ? 'text-yellow-500' :
-                                    row.rank === 2 ? 'text-slate-400' :
-                                      'text-amber-600'
+                                  row.rank === 2 ? 'text-slate-400' :
+                                    'text-amber-600'
                                   }`}>
                                   🏆 {row.rank}
                                 </span>
@@ -1836,10 +1844,10 @@ export default function Dashboard() {
                     key={prob.id}
                     onClick={() => setSelectedDraftProblemId(prob.id)}
                     className={`px-3 py-1.5 rounded text-xs font-semibold border transition shrink-0 ${selectedDraftProblemId === prob.id
-                        ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400'
-                        : hasDraft
-                          ? 'bg-slate-900 border-slate-800 text-slate-300'
-                          : 'bg-black/40 border-transparent text-slate-600'
+                      ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400'
+                      : hasDraft
+                        ? 'bg-slate-900 border-slate-800 text-slate-300'
+                        : 'bg-black/40 border-transparent text-slate-600'
                       }`}
                   >
                     #{prob.order_index} {prob.title} {hasDraft && '✏️'}
