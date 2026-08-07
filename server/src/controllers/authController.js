@@ -57,6 +57,26 @@ export async function login(req, res) {
 }
 
 export async function logout(req, res) {
+  if (req.user && req.user.role === 'participant') {
+    try {
+      await db.query(
+        "UPDATE participant_status SET is_online = FALSE, last_active_at = CURRENT_TIMESTAMP WHERE participant_id = $1",
+        [req.user.id]
+      );
+      
+      const io = req.app.get('io');
+      if (io) {
+        io.to('admin_room').emit('participant_status_changed', {
+          id: req.user.id,
+          username: req.user.username,
+          is_online: false
+        });
+      }
+    } catch (err) {
+      console.error('Error setting offline during logout:', err);
+    }
+  }
+
   res.clearCookie('token');
   return res.json({ message: 'Logout successful.' });
 }
@@ -66,4 +86,33 @@ export async function getMe(req, res) {
     return res.status(401).json({ error: 'Not authenticated.' });
   }
   return res.json({ user: req.user });
+}
+
+export async function updateSelfPassword(req, res) {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword || !newPassword.trim()) {
+    return res.status(400).json({ error: 'Current password and new password are required.' });
+  }
+
+  try {
+    const userRes = await db.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: 'User account not found.' });
+    }
+
+    const user = userRes.rows[0];
+    const match = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!match) {
+      return res.status(400).json({ error: 'Current password is incorrect.' });
+    }
+
+    const newHash = await bcrypt.hash(newPassword.trim(), 10);
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, user.id]);
+
+    return res.json({ message: 'Password updated successfully.' });
+  } catch (error) {
+    console.error('Error updating self password:', error);
+    return res.status(500).json({ error: 'Internal server error updating password.' });
+  }
 }

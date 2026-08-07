@@ -3,14 +3,18 @@ import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_jwt_secret_key_12345';
 
 export function authenticate(req, res, next) {
-  // Extract token from Cookie or Authorization header
-  let token = req.cookies.token;
-  
-  if (!token && req.headers.authorization) {
+  // Extract token from Authorization header first, then fallback to Cookie
+  let token = null;
+
+  if (req.headers.authorization) {
     const parts = req.headers.authorization.split(' ');
     if (parts.length === 2 && parts[0] === 'Bearer') {
       token = parts[1];
     }
+  }
+
+  if (!token && req.cookies && req.cookies.token) {
+    token = req.cookies.token;
   }
 
   if (!token) {

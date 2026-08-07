@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
 import axios from 'axios';
 import {
   LogOut, Play, Pause, Award, Clock, Plus, Edit2, Trash2, Database, Users,
-  Settings, Save, X, Eye, EyeOff, FileText, ChevronRight, CheckCircle2, RefreshCcw
+  Settings, Save, X, Eye, EyeOff, FileText, ChevronRight, CheckCircle2, RefreshCcw, Key
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -19,6 +19,7 @@ export default function Dashboard() {
   const [contests, setContests] = useState([]);
   const [selectedContest, setSelectedContest] = useState(null);
   const [showCreateContest, setShowCreateContest] = useState(false);
+  const [showEditContest, setShowEditContest] = useState(false);
   const [contestTitle, setContestTitle] = useState('');
   const [contestDesc, setContestDesc] = useState('');
   const [contestDuration, setContestDuration] = useState(60);
@@ -34,6 +35,10 @@ export default function Dashboard() {
   const [probTimeLimit, setProbTimeLimit] = useState(2000);
   const [probMemoryLimit, setProbMemoryLimit] = useState(128000);
   const [probPoints, setProbPoints] = useState(100);
+  const [problemFormTestCases, setProblemFormTestCases] = useState([]);
+  const [problemFormTcInput, setProblemFormTcInput] = useState('');
+  const [problemFormTcOutput, setProblemFormTcOutput] = useState('');
+  const [problemFormTcIsHidden, setProblemFormTcIsHidden] = useState(true);
 
   // Test Case States
   const [selectedProblemForTC, setSelectedProblemForTC] = useState(null);
@@ -42,13 +47,22 @@ export default function Dashboard() {
   const [tcOutput, setTcOutput] = useState('');
   const [tcIsHidden, setTcIsHidden] = useState(true);
   const [bulkTcJson, setBulkTcJson] = useState('');
+  const [isGeneratingOutput, setIsGeneratingOutput] = useState(false);
+  const [isGeneratingOutputTC, setIsGeneratingOutputTC] = useState(false);
 
   // Leaderboard State
   const [leaderboardList, setLeaderboardList] = useState([]);
+  const selectedContestRef = useRef(selectedContest);
+
+  useEffect(() => {
+    selectedContestRef.current = selectedContest;
+  }, [selectedContest]);
 
   const fetchLeaderboard = async () => {
     try {
-      const res = await axios.get('/api/leaderboard');
+      const currentContestId = selectedContestRef.current?.id;
+      const url = currentContestId ? `/api/leaderboard?contestId=${currentContestId}` : '/api/leaderboard';
+      const res = await axios.get(url);
       setLeaderboardList(res.data.leaderboard || []);
     } catch (err) {
       console.error('Failed to load leaderboard:', err);
@@ -76,12 +90,89 @@ export default function Dashboard() {
   const [participantDraftsMap, setParticipantDraftsMap] = useState({});
   const [selectedDraftProblemId, setSelectedDraftProblemId] = useState('');
 
+  // Add User Modal State
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState('participant');
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+
   const fetchParticipants = async () => {
     try {
-      const res = await axios.get('/api/admin/monitoring/participants');
-      setParticipantsList(res.data.participants || []);
+      const res = await axios.get('/api/admin/users');
+      setParticipantsList(res.data.users || []);
     } catch (err) {
-      console.error('Failed to load participants:', err);
+      console.error('Failed to load users:', err);
+    }
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    if (!newUsername.trim() || !newPassword.trim()) {
+      toast.error('Username and password are required.');
+      return;
+    }
+    setIsCreatingUser(true);
+    try {
+      await axios.post('/api/admin/users', {
+        username: newUsername.trim(),
+        password: newPassword.trim(),
+        role: newUserRole,
+      });
+      toast.success(`User "${newUsername.trim()}" created successfully!`);
+      setNewUsername('');
+      setNewPassword('');
+      setNewUserRole('participant');
+      setIsAddUserModalOpen(false);
+      fetchParticipants();
+      fetchStats();
+    } catch (err) {
+      console.error('Failed to create user:', err);
+      toast.error(err.response?.data?.error || 'Failed to create user.');
+    } finally {
+      setIsCreatingUser(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId, username) => {
+    if (!window.confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      await axios.delete(`/api/admin/users/${userId}`);
+      toast.success(`User "${username}" deleted successfully.`);
+      fetchParticipants();
+      fetchStats();
+    } catch (err) {
+      console.error('Failed to delete user:', err);
+      toast.error(err.response?.data?.error || 'Failed to delete user.');
+    }
+  };
+
+  // Update User Password Modal State
+  const [selectedUserForPasswordReset, setSelectedUserForPasswordReset] = useState(null);
+  const [resetPasswordInput, setResetPasswordInput] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    if (!resetPasswordInput.trim()) {
+      toast.error('New password is required.');
+      return;
+    }
+    setIsUpdatingPassword(true);
+    try {
+      await axios.put(`/api/admin/users/${selectedUserForPasswordReset.id}/password`, {
+        newPassword: resetPasswordInput.trim(),
+      });
+      toast.success(`Password updated successfully for "${selectedUserForPasswordReset.username}"!`);
+      setResetPasswordInput('');
+      setSelectedUserForPasswordReset(null);
+    } catch (err) {
+      console.error('Failed to update password:', err);
+      toast.error(err.response?.data?.error || 'Failed to update password.');
+    } finally {
+      setIsUpdatingPassword(false);
     }
   };
 
@@ -143,8 +234,11 @@ export default function Dashboard() {
       const res = await axios.get('/api/contests');
       setContests(res.data.contests);
       if (res.data.contests.length > 0) {
-        // Default to the first/latest contest
-        setSelectedContest(res.data.contests[0]);
+        const savedId = localStorage.getItem('admin_selected_contest_id');
+        const matchedSaved = savedId ? res.data.contests.find(c => c.id === savedId) : null;
+        const activeContest = res.data.contests.find(c => c.status === 'active' || c.status === 'paused');
+        const defaultContest = matchedSaved || activeContest || res.data.contests[0];
+        setSelectedContest(defaultContest);
       }
     } catch (err) {
       console.error(err);
@@ -170,6 +264,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (selectedContest) {
+      localStorage.setItem('admin_selected_contest_id', selectedContest.id);
       fetchProblems(selectedContest.id);
     }
   }, [selectedContest]);
@@ -243,6 +338,70 @@ export default function Dashboard() {
     }
   };
 
+  // Add time to active/paused contest
+  const [customAddMinutes, setCustomAddMinutes] = useState('');
+  const [adminTimeRemaining, setAdminTimeRemaining] = useState(0);
+
+  const calculateAdminTimeRemaining = (contest) => {
+    if (!contest || !['active', 'paused'].includes(contest.status)) {
+      setAdminTimeRemaining(0);
+      return;
+    }
+    const durationSecs = (parseInt(contest.duration_minutes, 10) || 60) * 60;
+    let elapsedSecs = parseInt(contest.elapsed_seconds, 10) || 0;
+
+    if (contest.status === 'active' && contest.start_time) {
+      const startTime = new Date(contest.start_time).getTime();
+      const now = new Date().getTime();
+      const runningSecs = Math.max(0, Math.floor((now - startTime) / 1000));
+      elapsedSecs += runningSecs;
+    }
+
+    const remaining = Math.max(0, durationSecs - elapsedSecs);
+    setAdminTimeRemaining(remaining);
+  };
+
+  useEffect(() => {
+    if (!selectedContest || selectedContest.status !== 'active') {
+      calculateAdminTimeRemaining(selectedContest);
+      return;
+    }
+
+    calculateAdminTimeRemaining(selectedContest);
+
+    const interval = setInterval(() => {
+      calculateAdminTimeRemaining(selectedContest);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [selectedContest]);
+
+  const handleAddContestTime = async (minutes) => {
+    if (!selectedContest) return;
+    try {
+      const res = await axios.post(`/api/contests/${selectedContest.id}/add-time`, { minutes });
+      setSelectedContest(res.data.contest);
+      setContests(prev => prev.map(c => c.id === res.data.contest.id ? res.data.contest : c));
+      toast.success(`Added ${minutes} minute(s) to contest timer!`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || 'Failed to add time to contest.');
+    }
+  };
+
+  const handleReduceContestTime = async (minutes) => {
+    if (!selectedContest) return;
+    try {
+      const res = await axios.post(`/api/contests/${selectedContest.id}/reduce-time`, { minutes });
+      setSelectedContest(res.data.contest);
+      setContests(prev => prev.map(c => c.id === res.data.contest.id ? res.data.contest : c));
+      toast.success(`Reduced ${minutes} minute(s) from contest timer!`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || 'Failed to reduce contest time.');
+    }
+  };
+
   // Create Contest
   const handleCreateContest = async (e) => {
     e.preventDefault();
@@ -263,10 +422,73 @@ export default function Dashboard() {
     }
   };
 
+  // Edit/Rename Contest
+  const handleUpdateContest = async (e) => {
+    e.preventDefault();
+    if (!selectedContest) return;
+    try {
+      const res = await axios.put(`/api/contests/${selectedContest.id}`, {
+        title: contestTitle,
+        description: contestDesc,
+        duration_minutes: contestDuration
+      });
+      setContests(prev => prev.map(c => c.id === res.data.contest.id ? res.data.contest : c));
+      setSelectedContest(res.data.contest);
+      setShowEditContest(false);
+      setContestTitle('');
+      setContestDesc('');
+      toast.success('Contest updated successfully.');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update contest.');
+    }
+  };
+
+  // Delete Contest
+  const handleDeleteContest = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this contest? All problems and submissions will be permanently removed.')) {
+      return;
+    }
+    try {
+      await axios.delete(`/api/contests/${id}`);
+      setContests(prev => prev.filter(c => c.id !== id));
+      if (selectedContest?.id === id) {
+        const remaining = contests.filter(c => c.id !== id);
+        setSelectedContest(remaining.length > 0 ? remaining[0] : null);
+      }
+      toast.success('Contest deleted successfully.');
+    } catch (err) {
+      toast.error('Failed to delete contest.');
+    }
+  };
+
   // Create/Update Problem
   const handleSaveProblem = async (e) => {
     e.preventDefault();
     if (!selectedContest) return;
+
+    const hasPendingTestCase = problemFormTcInput !== '' || problemFormTcOutput !== '';
+    if (!editingProblem && hasPendingTestCase && problemFormTcOutput === '') {
+      toast.error('Expected output is required for the pending test case.');
+      return;
+    }
+
+    const testCasesToCreate = !editingProblem
+      ? [
+        ...problemFormTestCases,
+        ...(hasPendingTestCase
+          ? [{
+            input: problemFormTcInput,
+            expected_output: problemFormTcOutput,
+            is_hidden: problemFormTcIsHidden
+          }]
+          : [])
+      ]
+      : [];
+
+    if (!editingProblem && testCasesToCreate.length === 0) {
+      toast.error('Add at least one test case before saving the problem.');
+      return;
+    }
 
     const payload = {
       contest_id: selectedContest.id,
@@ -286,13 +508,91 @@ export default function Dashboard() {
         toast.success('Problem updated.');
       } else {
         const res = await axios.post('/api/problems/admin', payload);
-        setProblems(prev => [...prev, res.data.problem].sort((a, b) => a.order_index - b.order_index));
-        toast.success('Problem added.');
+        const createdProblem = res.data.problem;
+        let uploadedTestCases = 0;
+        if (testCasesToCreate.length > 0) {
+          try {
+            await axios.post(`/api/problems/admin/${createdProblem.id}/testcases/bulk`, {
+              testCases: testCasesToCreate.map(({ input, expected_output, is_hidden }) => ({
+                input,
+                expected_output,
+                is_hidden
+              }))
+            });
+            uploadedTestCases = testCasesToCreate.length;
+          } catch (testCaseErr) {
+            console.error('Problem created, but test-case upload failed:', testCaseErr);
+            toast.error('Problem added, but test cases failed to upload.');
+          }
+        }
+        setProblems(prev => [...prev, createdProblem].sort((a, b) => a.order_index - b.order_index));
+        if (uploadedTestCases > 0 || testCasesToCreate.length === 0) {
+          toast.success(
+            uploadedTestCases > 0
+              ? `Problem added with ${uploadedTestCases} test case${uploadedTestCases === 1 ? '' : 's'}.`
+              : 'Problem added.'
+          );
+        }
       }
       resetProblemForm();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to save problem.');
     }
+  };
+
+  const handleAddProblemFormTestCase = () => {
+    if (problemFormTcInput.trim() === '' || problemFormTcOutput.trim() === '') {
+      toast.error('Both Stdin input and expected output are required for each test case.');
+      return;
+    }
+
+    setProblemFormTestCases(prev => [
+      ...prev,
+      {
+        tempId: globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+        input: problemFormTcInput.trim(),
+        expected_output: problemFormTcOutput.trim(),
+        is_hidden: problemFormTcIsHidden
+      }
+    ]);
+    setProblemFormTcInput('');
+    setProblemFormTcOutput('');
+    setProblemFormTcIsHidden(true);
+  };
+
+  // Generate expected output by running starter code against the input (problem form)
+  const handleGenerateOutput = async () => {
+    if (!probCode) {
+      toast.error('Enter the starter code first to generate output.');
+      return;
+    }
+    if (problemFormTcInput.trim() === '') {
+      toast.error('Enter a valid Stdin input first before generating output.');
+      return;
+    }
+    setIsGeneratingOutput(true);
+    try {
+      const res = await axios.post('/api/problems/admin/run-code', {
+        sourceCode: probCode,
+        input: problemFormTcInput,
+        timeLimitMs: probTimeLimit,
+        memoryLimitKb: probMemoryLimit
+      });
+      if (res.data.success) {
+        setProblemFormTcOutput(res.data.standardizedOutput || res.data.output.trim());
+        toast.success('Output generated from starter code.');
+      } else {
+        toast.error(`Run failed: ${res.data.error || res.data.status}`);
+      }
+    } catch (err) {
+      toast.error('Failed to run code on server.');
+    } finally {
+      setIsGeneratingOutput(false);
+    }
+  };
+
+  const handleRemoveProblemFormTestCase = (tempId) => {
+    setProblemFormTestCases(prev => prev.filter(tc => tc.tempId !== tempId));
   };
 
   const resetProblemForm = () => {
@@ -305,6 +605,10 @@ export default function Dashboard() {
     setProbTimeLimit(2000);
     setProbMemoryLimit(128000);
     setProbPoints(100);
+    setProblemFormTestCases([]);
+    setProblemFormTcInput('');
+    setProblemFormTcOutput('');
+    setProblemFormTcIsHidden(true);
   };
 
   const handleEditProblem = (prob) => {
@@ -316,6 +620,10 @@ export default function Dashboard() {
     setProbTimeLimit(prob.time_limit_ms);
     setProbMemoryLimit(prob.memory_limit_kb);
     setProbPoints(prob.points);
+    setProblemFormTestCases([]);
+    setProblemFormTcInput('');
+    setProblemFormTcOutput('');
+    setProblemFormTcIsHidden(true);
     setShowProblemForm(true);
   };
 
@@ -332,22 +640,31 @@ export default function Dashboard() {
 
   // Test Cases management
   const openTestCasesManager = async (prob) => {
+    if (!prob || !prob.id) {
+      toast.error('Invalid problem selected.');
+      return;
+    }
     setSelectedProblemForTC(prob);
     try {
       const res = await axios.get(`/api/problems/admin/${prob.id}/testcases`);
-      setTestCases(res.data.testCases);
+      setTestCases(res.data.testCases || []);
     } catch (err) {
-      toast.error('Failed to load test cases.');
+      console.error('Error fetching test cases:', err);
+      toast.error(err.response?.data?.error || 'Failed to load test cases.');
     }
   };
 
   const handleAddTestCase = async (e) => {
     e.preventDefault();
     if (!selectedProblemForTC) return;
+    if (tcInput.trim() === '' || tcOutput.trim() === '') {
+      toast.error('Both Stdin input and expected output are required.');
+      return;
+    }
     try {
       const res = await axios.post(`/api/problems/admin/${selectedProblemForTC.id}/testcases`, {
-        input: tcInput,
-        expected_output: tcOutput,
+        input: tcInput.trim(),
+        expected_output: tcOutput.trim(),
         is_hidden: tcIsHidden
       });
       setTestCases(prev => [...prev, res.data.testCase]);
@@ -355,7 +672,35 @@ export default function Dashboard() {
       setTcOutput('');
       toast.success('Testcase added.');
     } catch (err) {
-      toast.error('Failed to add testcase.');
+      toast.error(err.response?.data?.error || 'Failed to add testcase.');
+    }
+  };
+
+  // Generate expected output by running starter code (test case manager)
+  const handleGenerateOutputTC = async () => {
+    if (!selectedProblemForTC) return;
+    if (tcInput.trim() === '') {
+      toast.error('Enter a valid Stdin input first before generating output.');
+      return;
+    }
+    setIsGeneratingOutputTC(true);
+    try {
+      const res = await axios.post('/api/problems/admin/run-code', {
+        sourceCode: selectedProblemForTC.starter_code,
+        input: tcInput,
+        timeLimitMs: selectedProblemForTC.time_limit_ms,
+        memoryLimitKb: selectedProblemForTC.memory_limit_kb
+      });
+      if (res.data.success) {
+        setTcOutput(res.data.standardizedOutput || res.data.output.trim());
+        toast.success('Output generated from starter code.');
+      } else {
+        toast.error(`Run failed: ${res.data.error || res.data.status}`);
+      }
+    } catch (err) {
+      toast.error('Failed to run code on server.');
+    } finally {
+      setIsGeneratingOutputTC(false);
     }
   };
 
@@ -367,11 +712,11 @@ export default function Dashboard() {
       const res = await axios.post(`/api/problems/admin/${selectedProblemForTC.id}/testcases/bulk`, {
         testCases: parsed
       });
-      setTestCases(prev => [...prev, ...res.data.testCases]);
+      setTestCases(prev => [...prev, ...(res.data.testCases || [])]);
       setBulkTcJson('');
       toast.success(res.data.message || 'Bulk testcases uploaded successfully.');
     } catch (err) {
-      toast.error('Failed to upload bulk test cases. Ensure valid JSON list format.');
+      toast.error(err.response?.data?.error || 'Failed to upload bulk test cases. Ensure valid JSON list format.');
     }
   };
 
@@ -381,31 +726,35 @@ export default function Dashboard() {
       setTestCases(prev => prev.filter(tc => tc.id !== id));
       toast.success('Test case removed.');
     } catch (err) {
-      toast.error('Failed to delete testcase.');
+      toast.error(err.response?.data?.error || 'Failed to delete testcase.');
     }
   };
 
   return (
-    <div className="flex h-screen bg-black text-slate-100 overflow-hidden font-sans">
+    <div className="flex h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 text-slate-200 overflow-hidden font-sans relative">
+      {/* Premium Ambient Light Leaks */}
+      <div className="absolute top-1/4 left-1/4 h-[400px] w-[400px] rounded-full bg-indigo-500/5 blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-1/4 right-1/4 h-[400px] w-[400px] rounded-full bg-purple-500/5 blur-[120px] pointer-events-none"></div>
+
       {/* SIDEBAR NAVIGATION */}
-      <aside className="w-64 border-r border-slate-900 bg-slate-950/60 p-6 flex flex-col justify-between shrink-0">
+      <aside className="w-64 border-r border-white/[0.05] bg-slate-900/15 backdrop-blur-md p-6 flex flex-col justify-between shrink-0 z-10 shadow-[4px_0_30px_rgba(0,0,0,0.3)]">
         <div>
           <div className="flex items-center gap-3 mb-8">
-            <div className="h-9 w-9 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+            <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-indigo-500/15 to-purple-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.15)]">
               <Settings size={20} />
             </div>
             <div>
-              <h2 className="font-bold tracking-tight text-white">DebugLab Console</h2>
-              <span className="text-[10px] uppercase tracking-widest text-cyan-500 font-mono">Orchestration</span>
+              <h2 className="font-extrabold tracking-tight text-white">DebugLab</h2>
+              <span className="text-[9px] uppercase tracking-widest text-indigo-400 font-black font-mono">Console</span>
             </div>
           </div>
 
           <nav className="space-y-1.5">
             <button
               onClick={() => setActiveTab('controls')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition ${activeTab === 'controls'
-                  ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400'
-                  : 'text-slate-400 hover:bg-slate-900 hover:text-white border border-transparent'
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition duration-300 border ${activeTab === 'controls'
+                ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
                 }`}
             >
               <Clock size={16} />
@@ -413,9 +762,9 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setActiveTab('problems')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition ${activeTab === 'problems'
-                  ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400'
-                  : 'text-slate-400 hover:bg-slate-900 hover:text-white border border-transparent'
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition duration-300 border ${activeTab === 'problems'
+                ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
                 }`}
             >
               <FileText size={16} />
@@ -423,9 +772,9 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setActiveTab('participants')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition ${activeTab === 'participants'
-                  ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400'
-                  : 'text-slate-400 hover:bg-slate-900 hover:text-white border border-transparent'
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition duration-300 border ${activeTab === 'participants'
+                ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
                 }`}
             >
               <Users size={16} />
@@ -433,9 +782,9 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setActiveTab('leaderboard')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition ${activeTab === 'leaderboard'
-                  ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400'
-                  : 'text-slate-400 hover:bg-slate-900 hover:text-white border border-transparent'
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition duration-300 border ${activeTab === 'leaderboard'
+                ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                : 'text-slate-400 hover:bg-white/[0.04] hover:text-white border-transparent'
                 }`}
             >
               <Award size={16} />
@@ -444,19 +793,19 @@ export default function Dashboard() {
           </nav>
         </div>
 
-        <div className="border-t border-slate-900 pt-4">
+        <div className="border-t border-white/[0.05] pt-4">
           <div className="flex items-center gap-3 mb-4">
-            <div className="h-8 w-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-300 uppercase">
+            <div className="h-8 w-8 rounded-full bg-slate-800 border border-white/[0.08] flex items-center justify-center text-xs font-bold text-slate-300 uppercase">
               {user?.username?.[0] || 'A'}
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-300">{user?.username}</p>
-              <p className="text-[10px] text-slate-500">Administrator</p>
+              <p className="text-xs font-bold text-slate-300">{user?.username}</p>
+              <p className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">Orchestrator</p>
             </div>
           </div>
           <button
             onClick={logout}
-            className="w-full flex items-center gap-2 justify-center px-4 py-2 rounded-lg bg-slate-950 border border-slate-900 text-xs text-slate-400 hover:bg-slate-900 hover:text-white transition"
+            className="w-full flex items-center gap-2 justify-center px-4 py-2.5 rounded-xl bg-white/[0.02] border border-white/[0.08] text-xs text-slate-400 hover:bg-white/[0.06] hover:text-white transition duration-300"
           >
             <LogOut size={14} />
             Sign Out
@@ -465,15 +814,15 @@ export default function Dashboard() {
       </aside>
 
       {/* MAIN CONTAINER */}
-      <main className="flex-1 flex flex-col min-w-0 bg-slate-950/20 overflow-y-auto">
-        <header className="h-16 border-b border-slate-900 px-8 flex justify-between items-center shrink-0">
+      <main className="flex-1 flex flex-col min-w-0 bg-slate-900/5 overflow-y-auto z-10">
+        <header className="h-16 border-b border-white/[0.05] px-8 flex justify-between items-center bg-slate-900/40 backdrop-blur-md shrink-0 shadow-[0_4px_30px_rgba(0,0,0,0.3)]">
           <div className="flex items-center gap-4">
-            <span className="text-xs text-slate-500">Selected Contest:</span>
+            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider font-mono">Selected Contest:</span>
             {selectedContest ? (
               <select
                 value={selectedContest.id}
                 onChange={(e) => setSelectedContest(contests.find(c => c.id === e.target.value))}
-                className="bg-black border border-slate-900 text-white rounded px-3 py-1.5 text-sm focus:outline-none focus:border-cyan-500"
+                className="bg-slate-950 border border-white/[0.08] text-white rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/80 transition-all duration-300 font-sans"
               >
                 {contests.map(c => (
                   <option key={c.id} value={c.id}>{c.title}</option>
@@ -483,20 +832,46 @@ export default function Dashboard() {
               <span className="text-sm font-semibold text-slate-400">None</span>
             )}
             <button
-              onClick={() => setShowCreateContest(true)}
-              className="text-xs text-cyan-400 hover:underline flex items-center gap-1"
+              onClick={() => {
+                setContestTitle('');
+                setContestDesc('');
+                setContestDuration(60);
+                setShowCreateContest(true);
+              }}
+              className="text-xs text-cyan-400 hover:underline flex items-center gap-1 font-bold"
             >
-              <Plus size={12} /> New Contest
+              <Plus size={12} /> New
             </button>
+            {selectedContest && (
+              <>
+                <button
+                  onClick={() => {
+                    setContestTitle(selectedContest.title);
+                    setContestDesc(selectedContest.description || '');
+                    setContestDuration(selectedContest.duration_minutes || 60);
+                    setShowEditContest(true);
+                  }}
+                  className="text-xs text-slate-400 hover:underline flex items-center gap-1 font-bold"
+                >
+                  <Edit2 size={12} /> Rename
+                </button>
+                <button
+                  onClick={() => handleDeleteContest(selectedContest.id)}
+                  className="text-xs text-red-500/80 hover:underline flex items-center gap-1 font-bold"
+                >
+                  <Trash2 size={12} /> Delete
+                </button>
+              </>
+            )}
           </div>
 
           {selectedContest && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500">Status:</span>
-              <span className={`px-2 py-0.5 text-xs font-bold rounded uppercase tracking-wider ${selectedContest.status === 'active' ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' :
-                  selectedContest.status === 'paused' ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400' :
-                    selectedContest.status === 'ended' ? 'bg-red-500/10 border border-red-500/30 text-red-400' :
-                      'bg-slate-800 text-slate-400'
+              <span className="text-xs text-slate-400 font-bold uppercase tracking-wider font-mono">Status:</span>
+              <span className={`px-2.5 py-0.5 text-[10px] font-black rounded-lg uppercase tracking-wider border ${selectedContest.status === 'active' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
+                selectedContest.status === 'paused' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' :
+                  selectedContest.status === 'ended' ? 'bg-red-500/10 border-red-500/30 text-red-400' :
+                    'bg-slate-800 border-slate-700 text-slate-400'
                 }`}>
                 {selectedContest.status}
               </span>
@@ -510,29 +885,47 @@ export default function Dashboard() {
             <div className="space-y-6 max-w-4xl">
               {/* Overview Stats Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="rounded-xl border border-slate-900 bg-slate-950/60 p-4 flex flex-col">
-                  <span className="text-[10px] uppercase tracking-wider font-mono text-slate-500">Total Registered</span>
-                  <span className="text-2xl font-extrabold text-white mt-1">{stats.totalParticipants}</span>
-                  <span className="text-[10px] text-slate-600 mt-0.5">Participants on roster</span>
+                <div className="rounded-xl border border-white/[0.05] bg-slate-900/20 p-5 flex flex-col hover:bg-slate-900/30 hover:scale-[1.01] transition-all duration-300 shadow-lg">
+                  <span className="text-[10px] uppercase tracking-wider font-mono text-slate-400 font-bold">Total Registered</span>
+                  <span className="text-3xl font-black text-white mt-1.5">{stats.totalParticipants}</span>
+                  <span className="text-[10px] text-slate-500 mt-1">Participants on roster</span>
                 </div>
-                <div className="rounded-xl border border-slate-900 bg-slate-950/60 p-4 flex flex-col">
-                  <span className="text-[10px] uppercase tracking-wider font-mono text-slate-500">Active Online</span>
-                  <span className="text-2xl font-extrabold text-emerald-400 mt-1 flex items-center gap-1.5">
+                <div className="rounded-xl border border-white/[0.05] bg-slate-900/20 p-5 flex flex-col hover:bg-slate-900/30 hover:scale-[1.01] transition-all duration-300 shadow-lg">
+                  <span className="text-[10px] uppercase tracking-wider font-mono text-slate-400 font-bold">Active Online</span>
+                  <span className="text-3xl font-black text-emerald-400 mt-1.5 flex items-center gap-2">
                     {stats.onlineParticipants}
                     <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                   </span>
-                  <span className="text-[10px] text-slate-600 mt-0.5">Sockets connected now</span>
+                  <span className="text-[10px] text-slate-500 mt-1">Sockets connected now</span>
                 </div>
-                <div className="rounded-xl border border-slate-900 bg-slate-950/60 p-4 flex flex-col">
-                  <span className="text-[10px] uppercase tracking-wider font-mono text-slate-500">Submissions Made</span>
-                  <span className="text-2xl font-extrabold text-cyan-400 mt-1">{stats.totalSubmissions}</span>
-                  <span className="text-[10px] text-slate-600 mt-0.5">Evaluated by judge sandbox</span>
+                <div className="rounded-xl border border-white/[0.05] bg-slate-900/20 p-5 flex flex-col hover:bg-slate-900/30 hover:scale-[1.01] transition-all duration-300 shadow-lg">
+                  <span className="text-[10px] uppercase tracking-wider font-mono text-slate-400 font-bold">Submissions Made</span>
+                  <span className="text-3xl font-black text-cyan-400 mt-1.5">{stats.totalSubmissions}</span>
+                  <span className="text-[10px] text-slate-500 mt-1">Evaluated by judge sandbox</span>
                 </div>
               </div>
 
               <div className="rounded-xl border border-slate-900 bg-slate-950/80 p-6">
-                <h3 className="text-lg font-bold mb-1 text-white">Contest Status Manager</h3>
-                <p className="text-slate-400 text-sm mb-6">Transition the contest session lifecycle state in real-time.</p>
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Contest Status Manager</h3>
+                    <p className="text-slate-400 text-sm">Transition the contest session lifecycle state in real-time.</p>
+                  </div>
+                  {selectedContest && (
+                    <div className={`flex items-center gap-3 px-4 py-2 rounded-xl border font-mono text-sm font-bold ${selectedContest.status === 'active'
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                        : selectedContest.status === 'paused'
+                          ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                          : 'border-slate-800 bg-slate-900 text-slate-400'
+                      }`}>
+                      <Clock size={16} className={selectedContest.status === 'active' ? 'animate-pulse text-emerald-400' : ''} />
+                      <span>
+                        {Math.floor(adminTimeRemaining / 60)}m {adminTimeRemaining % 60}s
+                        {selectedContest.status === 'paused' ? ' (PAUSED)' : ''}
+                      </span>
+                    </div>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <button
@@ -582,6 +975,99 @@ export default function Dashboard() {
                     <span className="text-sm font-semibold text-red-400">End Session</span>
                     <span className="text-[10px] text-slate-500 mt-1">Finalize scores & locking</span>
                   </button>
+                </div>
+
+                {/* ADJUST CONTEST DURATION CONTROLS */}
+                <div className="mt-6 pt-6 border-t border-slate-900 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <h4 className="text-sm font-bold text-white mb-0.5 flex items-center gap-2">
+                        <Clock size={16} className="text-cyan-400" /> Adjust Contest Duration
+                      </h4>
+                      <p className="text-xs text-slate-400">Add or reduce contest time for ongoing or paused sessions in real-time.</p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 font-mono">
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Mins"
+                        value={customAddMinutes}
+                        onChange={(e) => setCustomAddMinutes(e.target.value)}
+                        className="w-20 rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none font-mono"
+                      />
+                      <button
+                        onClick={() => {
+                          const mins = parseInt(customAddMinutes, 10);
+                          if (mins > 0) {
+                            handleAddContestTime(mins);
+                            setCustomAddMinutes('');
+                          } else {
+                            toast.error('Enter valid positive minutes.');
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30 text-xs font-bold transition"
+                      >
+                        + Add
+                      </button>
+                      <button
+                        onClick={() => {
+                          const mins = parseInt(customAddMinutes, 10);
+                          if (mins > 0) {
+                            handleReduceContestTime(mins);
+                            setCustomAddMinutes('');
+                          } else {
+                            toast.error('Enter valid positive minutes.');
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-400 hover:bg-rose-500/30 text-xs font-bold transition"
+                      >
+                        - Reduce
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-900/60">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono mr-1">Quick Add:</span>
+                    <button
+                      onClick={() => handleAddContestTime(5)}
+                      className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500/50 hover:bg-cyan-500/10 text-xs font-bold text-cyan-400 transition"
+                    >
+                      + 5 Mins
+                    </button>
+                    <button
+                      onClick={() => handleAddContestTime(10)}
+                      className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500/50 hover:bg-cyan-500/10 text-xs font-bold text-cyan-400 transition"
+                    >
+                      + 10 Mins
+                    </button>
+                    <button
+                      onClick={() => handleAddContestTime(15)}
+                      className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500/50 hover:bg-cyan-500/10 text-xs font-bold text-cyan-400 transition"
+                    >
+                      + 15 Mins
+                    </button>
+
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono ml-4 mr-1">Quick Reduce:</span>
+                    <button
+                      onClick={() => handleReduceContestTime(5)}
+                      className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-rose-500/50 hover:bg-rose-500/10 text-xs font-bold text-rose-400 transition"
+                    >
+                      - 5 Mins
+                    </button>
+                    <button
+                      onClick={() => handleReduceContestTime(10)}
+                      className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-rose-500/50 hover:bg-rose-500/10 text-xs font-bold text-rose-400 transition"
+                    >
+                      - 10 Mins
+                    </button>
+                    <button
+                      onClick={() => handleReduceContestTime(15)}
+                      className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-rose-500/50 hover:bg-rose-500/10 text-xs font-bold text-rose-400 transition"
+                    >
+                      - 15 Mins
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -740,6 +1226,110 @@ export default function Dashboard() {
                     </div>
                   </div>
 
+                  {!editingProblem && (
+                    <div className="border-t border-slate-900 pt-5 space-y-4">
+                      <div className="flex justify-between items-start gap-4">
+                        <div>
+                          <h5 className="text-xs font-bold text-cyan-400 uppercase">Initial Test Cases</h5>
+                          <p className="text-[10px] text-slate-500 mt-1">
+                            Add cases now, or manage them later from the test-case panel.
+                          </p>
+                        </div>
+                        <span className="rounded border border-slate-800 bg-black px-2 py-1 text-[10px] font-mono text-slate-400">
+                          {problemFormTestCases.length} queued
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-500 uppercase font-semibold">Stdin Input</label>
+                          <textarea
+                            value={problemFormTcInput}
+                            onChange={(e) => setProblemFormTcInput(e.target.value)}
+                            placeholder="e.g. 5"
+                            rows={3}
+                            className="w-full rounded border border-slate-900 bg-black py-2 px-3 text-xs font-mono focus:outline-none focus:border-cyan-500"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-500 uppercase font-semibold">Expected Stdout</label>
+                          <textarea
+                            value={problemFormTcOutput}
+                            onChange={(e) => setProblemFormTcOutput(e.target.value)}
+                            placeholder="e.g. 120"
+                            rows={3}
+                            className="w-full rounded border border-slate-900 bg-black py-2 px-3 text-xs font-mono focus:outline-none focus:border-cyan-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={problemFormTcIsHidden}
+                            onChange={(e) => setProblemFormTcIsHidden(e.target.checked)}
+                            className="accent-cyan-500 rounded border-slate-900 bg-black"
+                          />
+                          Hidden Test Case
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={handleGenerateOutput}
+                            disabled={isGeneratingOutput}
+                            className="flex items-center gap-1.5 rounded bg-emerald-900/40 border border-emerald-700/40 px-3 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-800/40 transition disabled:opacity-40"
+                          >
+                            <Play size={10} fill="currentColor" />
+                            {isGeneratingOutput ? 'Running...' : 'Generate Output'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleAddProblemFormTestCase}
+                            className="flex items-center gap-1.5 rounded bg-slate-900 border border-slate-800 px-3 py-1.5 text-xs font-semibold text-cyan-400 hover:bg-slate-800 transition"
+                          >
+                            <Plus size={12} /> Add Case
+                          </button>
+                        </div>
+                      </div>
+
+                      {problemFormTestCases.length > 0 && (
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {problemFormTestCases.map((tc, index) => (
+                            <div key={tc.tempId} className="flex justify-between items-center rounded border border-slate-900 bg-black/40 p-2.5 text-xs">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-bold text-[10px] text-slate-500">Case #{index + 1}</span>
+                                  {tc.is_hidden ? (
+                                    <span className="flex items-center gap-0.5 text-[9px] text-amber-500 bg-amber-500/5 border border-amber-500/20 px-1 rounded font-mono">
+                                      <EyeOff size={8} /> Hidden
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-0.5 text-[9px] text-cyan-500 bg-cyan-500/5 border border-cyan-500/20 px-1 rounded font-mono">
+                                      <Eye size={8} /> Public
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-4 font-mono text-[10px] text-slate-400">
+                                  <p className="truncate">In: "{tc.input}"</p>
+                                  <p className="truncate">Out: "{tc.expected_output}"</p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveProblemFormTestCase(tc.tempId)}
+                                className="text-slate-600 hover:text-red-400 p-1 shrink-0"
+                                title="Remove queued test case"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex justify-end gap-2 pt-2">
                     <button
                       type="button"
@@ -850,14 +1440,25 @@ export default function Dashboard() {
                               onChange={(e) => setTcIsHidden(e.target.checked)}
                               className="accent-cyan-500 rounded border-slate-900 bg-black"
                             />
-                            Hidden Test Case (Not shown in participant logs)
+                            Hidden Test Case
                           </label>
-                          <button
-                            type="submit"
-                            className="bg-cyan-600 hover:bg-cyan-500 text-white rounded py-1 px-3 text-xs font-semibold"
-                          >
-                            Add Case
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={handleGenerateOutputTC}
+                              disabled={isGeneratingOutputTC}
+                              className="flex items-center gap-1.5 bg-emerald-900/40 border border-emerald-700/40 text-emerald-400 rounded py-1 px-2.5 text-xs font-semibold hover:bg-emerald-800/40 transition disabled:opacity-40"
+                            >
+                              <Play size={10} fill="currentColor" />
+                              {isGeneratingOutputTC ? 'Running...' : 'Generate Output'}
+                            </button>
+                            <button
+                              type="submit"
+                              className="bg-cyan-600 hover:bg-cyan-500 text-white rounded py-1 px-3 text-xs font-semibold"
+                            >
+                              Add Case
+                            </button>
+                          </div>
                         </div>
                       </form>
 
@@ -937,25 +1538,33 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TAB 3: PARTICIPANTS */}
-          {activeTab === 'participants' && selectedContest && (
+          {/* TAB 3: PARTICIPANTS & USERS */}
+          {activeTab === 'participants' && (
             <div className="rounded-xl border border-slate-900 bg-slate-950/80 p-6 space-y-6">
               <div className="flex justify-between items-center border-b border-slate-900 pb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-white">Participants Listing</h3>
-                  <p className="text-slate-400 text-xs mt-0.5">View real-time participant connection statuses and active problem drafts.</p>
+                  <h3 className="text-lg font-bold text-white">User & Participant Management</h3>
+                  <p className="text-slate-400 text-xs mt-0.5">Manage registered accounts, connection statuses, and live problem drafts.</p>
                 </div>
-                <button
-                  onClick={fetchParticipants}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs text-cyan-400 font-semibold transition"
-                >
-                  <RefreshCcw size={12} /> Sync Statuses
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsAddUserModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] text-xs font-bold text-white transition"
+                  >
+                    <Plus size={14} /> Add User
+                  </button>
+                  <button
+                    onClick={fetchParticipants}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs text-cyan-400 font-semibold transition"
+                  >
+                    <RefreshCcw size={12} /> Sync Users
+                  </button>
+                </div>
               </div>
 
               {participantsList.length === 0 ? (
                 <div className="text-center py-12 text-slate-600 text-xs border border-dashed border-slate-900 rounded-lg bg-black/40">
-                  No participants registered. Sign them in from client machines to view connectivity logs.
+                  No users found in database. Click "Add User" above to create user accounts.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -964,6 +1573,7 @@ export default function Dashboard() {
                       <tr className="border-b border-slate-900 text-[11px] uppercase tracking-wider text-slate-500 font-mono font-normal">
                         <th className="py-3 px-4 font-normal">Status</th>
                         <th className="py-3 px-4 font-normal">Username / ID</th>
+                        <th className="py-3 px-4 font-normal">Role</th>
                         <th className="py-3 px-4 font-normal text-center">Active Problem</th>
                         <th className="py-3 px-4 font-normal text-right">Last Sync Ping</th>
                         <th className="py-3 px-4 font-normal text-right">Actions</th>
@@ -975,8 +1585,8 @@ export default function Dashboard() {
                           <td className="py-3.5 px-4">
                             <span className="flex items-center gap-2">
                               <span className={`h-2.5 w-2.5 rounded-full ${p.is_online
-                                  ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] animate-pulse'
-                                  : 'bg-slate-700'
+                                ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] animate-pulse'
+                                : 'bg-slate-700'
                                 }`} />
                               <span className={`text-xs font-semibold ${p.is_online ? 'text-emerald-400' : 'text-slate-500'}`}>
                                 {p.is_online ? 'Online' : 'Offline'}
@@ -984,6 +1594,14 @@ export default function Dashboard() {
                             </span>
                           </td>
                           <td className="py-3.5 px-4 font-semibold text-slate-200">{p.username}</td>
+                          <td className="py-3.5 px-4 text-xs">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${p.role === 'admin'
+                                ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400'
+                                : 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400'
+                              }`}>
+                              {p.role || 'participant'}
+                            </span>
+                          </td>
                           <td className="py-3.5 px-4 text-center font-mono text-xs">
                             {p.current_problem_title ? (
                               <span className="text-cyan-400">
@@ -997,12 +1615,34 @@ export default function Dashboard() {
                             {p.last_active_at ? new Date(p.last_active_at).toLocaleTimeString() : 'Never'}
                           </td>
                           <td className="py-3.5 px-4 text-right">
-                            <button
-                              onClick={() => openParticipantModal(p)}
-                              className="text-xs text-cyan-400 hover:underline hover:text-cyan-300 font-semibold"
-                            >
-                              Inspect Live Code
-                            </button>
+                            <div className="flex items-center justify-end gap-3">
+                              {p.role !== 'admin' && (
+                                <button
+                                  onClick={() => openParticipantModal(p)}
+                                  className="text-xs text-cyan-400 hover:underline hover:text-cyan-300 font-semibold"
+                                >
+                                  Inspect Code
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setSelectedUserForPasswordReset(p);
+                                  setResetPasswordInput('');
+                                }}
+                                className="text-xs text-amber-400 hover:text-amber-300 hover:underline font-semibold flex items-center gap-1"
+                                title="Change Password"
+                              >
+                                <Key size={12} /> Password
+                              </button>
+                              <button
+                                onClick={() => handleDeleteUser(p.id, p.username)}
+                                disabled={p.id === user?.id}
+                                className="text-xs text-red-400 hover:text-red-300 hover:underline font-semibold disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1"
+                                title="Remove User"
+                              >
+                                <Trash2 size={12} /> Remove
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1061,8 +1701,8 @@ export default function Dashboard() {
                             <td className="py-3.5 px-4 font-mono font-bold">
                               {isTop3 ? (
                                 <span className={`flex items-center gap-1 text-sm ${row.rank === 1 ? 'text-yellow-500' :
-                                    row.rank === 2 ? 'text-slate-400' :
-                                      'text-amber-600'
+                                  row.rank === 2 ? 'text-slate-400' :
+                                    'text-amber-600'
                                   }`}>
                                   🏆 {row.rank}
                                 </span>
@@ -1157,6 +1797,72 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* EDIT CONTEST DIALOG MODAL */}
+      {showEditContest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-900 bg-slate-950 p-6 shadow-[0_0_50px_rgba(6,182,212,0.08)]">
+            <div className="flex justify-between items-center mb-6 border-b border-slate-900 pb-3">
+              <h3 className="text-lg font-bold text-cyan-400">Rename / Edit Contest</h3>
+              <button onClick={() => setShowEditContest(false)} className="text-slate-400 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateContest} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold uppercase">Contest Title</label>
+                <input
+                  type="text"
+                  value={contestTitle}
+                  onChange={(e) => setContestTitle(e.target.value)}
+                  placeholder="e.g. ACM Debugging Fall 2026"
+                  className="w-full rounded border border-slate-900 bg-black py-2 px-3 text-sm focus:outline-none focus:border-cyan-500"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold uppercase">Description</label>
+                <textarea
+                  value={contestDesc}
+                  onChange={(e) => setContestDesc(e.target.value)}
+                  placeholder="Enter details about rules and guidelines..."
+                  rows={3}
+                  className="w-full rounded border border-slate-900 bg-black py-2 px-3 text-sm focus:outline-none focus:border-cyan-500 font-sans"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 font-semibold uppercase">Duration (Minutes)</label>
+                <input
+                  type="number"
+                  value={contestDuration}
+                  onChange={(e) => setContestDuration(parseInt(e.target.value, 10))}
+                  className="w-full rounded border border-slate-900 bg-black py-2 px-3 text-sm focus:outline-none focus:border-cyan-500"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditContest(false)}
+                  className="px-4 py-2 border border-slate-900 rounded bg-slate-950 text-sm text-slate-400 hover:bg-slate-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded bg-cyan-600 hover:bg-cyan-500 text-sm font-semibold flex items-center gap-1.5"
+                >
+                  <CheckCircle2 size={16} /> Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* INSPECT PARTICIPANT LIVE CODE MODAL */}
       {selectedParticipantForModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -1186,10 +1892,10 @@ export default function Dashboard() {
                     key={prob.id}
                     onClick={() => setSelectedDraftProblemId(prob.id)}
                     className={`px-3 py-1.5 rounded text-xs font-semibold border transition shrink-0 ${selectedDraftProblemId === prob.id
-                        ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400'
-                        : hasDraft
-                          ? 'bg-slate-900 border-slate-800 text-slate-300'
-                          : 'bg-black/40 border-transparent text-slate-600'
+                      ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400'
+                      : hasDraft
+                        ? 'bg-slate-900 border-slate-800 text-slate-300'
+                        : 'bg-black/40 border-transparent text-slate-600'
                       }`}
                   >
                     #{prob.order_index} {prob.title} {hasDraft && '✏️'}
@@ -1226,6 +1932,151 @@ export default function Dashboard() {
                 Close Inspector
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD USER MODAL */}
+      {isAddUserModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-900 bg-slate-950 p-6 shadow-2xl space-y-6">
+            <div className="flex justify-between items-center border-b border-slate-900 pb-4">
+              <div className="flex items-center gap-2 text-cyan-400">
+                <Users size={20} />
+                <h3 className="text-lg font-bold text-white">Create New User</h3>
+              </div>
+              <button
+                onClick={() => setIsAddUserModalOpen(false)}
+                className="text-slate-500 hover:text-white transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. USER-104 or alex_dev"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3.5 py-2 text-sm text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter secure password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3.5 py-2 text-sm text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Password will be hashed securely using bcrypt before saving to database.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Role
+                </label>
+                <select
+                  value={newUserRole}
+                  onChange={(e) => setNewUserRole(e.target.value)}
+                  className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3.5 py-2 text-sm text-white focus:border-cyan-500 focus:outline-none"
+                >
+                  <option value="participant">Participant (Contestant)</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-900">
+                <button
+                  type="button"
+                  onClick={() => setIsAddUserModalOpen(false)}
+                  className="px-4 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-400 hover:text-white transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingUser}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] text-xs font-bold text-white transition disabled:opacity-40"
+                >
+                  <Plus size={14} />
+                  {isCreatingUser ? 'Creating...' : 'Create Account'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* RESET/UPDATE USER PASSWORD MODAL */}
+      {selectedUserForPasswordReset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-900 bg-slate-950 p-6 shadow-2xl space-y-6">
+            <div className="flex justify-between items-center border-b border-slate-900 pb-4">
+              <div className="flex items-center gap-2 text-amber-400">
+                <Key size={20} />
+                <h3 className="text-lg font-bold text-white">Reset User Password</h3>
+              </div>
+              <button
+                onClick={() => setSelectedUserForPasswordReset(null)}
+                className="text-slate-500 hover:text-white transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <div>
+                <p className="text-xs text-slate-400 mb-3">
+                  Updating password for user account: <span className="font-mono text-cyan-400 font-bold">{selectedUserForPasswordReset.username}</span>
+                </p>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter new password"
+                  value={resetPasswordInput}
+                  onChange={(e) => setResetPasswordInput(e.target.value)}
+                  className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3.5 py-2 text-sm text-white placeholder-slate-600 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Password will be hashed using bcrypt before updating in database.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-900">
+                <button
+                  type="button"
+                  onClick={() => setSelectedUserForPasswordReset(null)}
+                  className="px-4 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-400 hover:text-white transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingPassword}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:shadow-[0_0_15px_rgba(245,158,11,0.3)] text-xs font-bold text-slate-950 transition disabled:opacity-40"
+                >
+                  <Key size={14} />
+                  {isUpdatingPassword ? 'Updating...' : 'Update Password'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

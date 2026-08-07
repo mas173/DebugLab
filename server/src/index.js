@@ -15,11 +15,16 @@ import * as db from './db.js';
 const app = express();
 const server = http.createServer(app);
 
+const allowedOrigins = [
+  process.env.CLIENT_ORIGIN,
+  process.env.ADMIN_ORIGIN,
+].filter(Boolean);
+
 // Enable Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_ORIGIN || '*',
-    methods: ['GET', 'POST'],
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
     credentials: true,
   },
 });
@@ -31,7 +36,16 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(
   cors({
-    origin: process.env.CLIENT_ORIGIN || '*',
+    origin: (origin, callback) => {
+      // Allow requests without Origin (Postman, curl)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   })
 );
@@ -42,6 +56,7 @@ import problemRoutes from './routes/problemRoutes.js';
 import submissionRoutes from './routes/submissionRoutes.js';
 import leaderboardRoutes from './routes/leaderboardRoutes.js';
 import monitoringRoutes from './routes/monitoringRoutes.js';
+import userRoutes from './routes/userRoutes.js';
 
 // Basic test route
 app.get('/api/health', (req, res) => {
@@ -55,6 +70,7 @@ app.use('/api/problems', problemRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/admin/monitoring', monitoringRoutes);
+app.use('/api/admin/users', userRoutes);
 
 function parseCookies(cookieHeader) {
   if (!cookieHeader) return {};
@@ -68,15 +84,27 @@ function parseCookies(cookieHeader) {
 
 // Socket.IO Authentication Middleware
 io.use((socket, next) => {
-  const cookieHeader = socket.handshake.headers.cookie;
-  const cookies = parseCookies(cookieHeader);
-  let token = cookies.token;
+  let token = null;
 
-  if (!token && socket.handshake.headers.authorization) {
+  // Prioritize token passed explicitly in auth payload or headers over shared cookies
+  if (socket.handshake.auth && socket.handshake.auth.token) {
+    const rawToken = socket.handshake.auth.token;
+    if (rawToken.startsWith('Bearer ')) {
+      token = rawToken.split(' ')[1];
+    } else {
+      token = rawToken;
+    }
+  } else if (socket.handshake.headers.authorization) {
     const parts = socket.handshake.headers.authorization.split(' ');
     if (parts.length === 2 && parts[0] === 'Bearer') {
       token = parts[1];
     }
+  }
+
+  if (!token) {
+    const cookieHeader = socket.handshake.headers.cookie;
+    const cookies = parseCookies(cookieHeader);
+    token = cookies.token;
   }
 
   if (!token) {
@@ -93,20 +121,47 @@ io.use((socket, next) => {
   }
 });
 
+// Track active connections per participant to avoid multi-tab race conditions
+const activeConnections = new Map(); // userId -> Set of socketIds
+
 // Real-Time Socket Connection Handling
 io.on('connection', async (socket) => {
   console.log(`Socket connected: ${socket.id} (Authenticated: ${!!socket.user})`);
 
-  // Mark participant online in database
+  // Mark participant online in database & enforce single active tab per participant
   if (socket.user && socket.user.role === 'participant') {
+    const userId = socket.user.id;
+    let existingSockets = activeConnections.get(userId);
+
+    if (existingSockets) {
+      // Clean up any stale sockets that have already disconnected
+      for (const socketId of Array.from(existingSockets)) {
+        const activeSock = io.sockets.sockets.get(socketId);
+        if (!activeSock || !activeSock.connected) {
+          existingSockets.delete(socketId);
+        }
+      }
+    }
+
+    if (existingSockets && existingSockets.size >= 1) {
+      console.log(`Rejecting multi-tab connection for user ${userId} on socket ${socket.id}`);
+      socket.emit('multiple_tabs_error', {
+        message: 'Only one active tab is allowed per participant account.'
+      });
+      socket.disconnect(true);
+      return;
+    }
+
+    activeConnections.set(userId, new Set([socket.id]));
+
     try {
       await db.query(
         "UPDATE participant_status SET is_online = TRUE, last_active_at = CURRENT_TIMESTAMP WHERE participant_id = $1",
-        [socket.user.id]
+        [userId]
       );
       // Broadcast online status change to admin room
       io.to('admin_room').emit('participant_status_changed', {
-        id: socket.user.id,
+        id: userId,
         username: socket.user.username,
         is_online: true
       });
@@ -130,19 +185,34 @@ io.on('connection', async (socket) => {
 
     // Mark participant offline in database
     if (socket.user && socket.user.role === 'participant') {
-      try {
-        await db.query(
-          "UPDATE participant_status SET is_online = FALSE, last_active_at = CURRENT_TIMESTAMP WHERE participant_id = $1",
-          [socket.user.id]
-        );
-        // Broadcast offline status change to admin room
-        io.to('admin_room').emit('participant_status_changed', {
-          id: socket.user.id,
-          username: socket.user.username,
-          is_online: false
-        });
-      } catch (err) {
-        console.error('Error marking participant offline:', err);
+      const userId = socket.user.id;
+      let shouldMarkOffline = false;
+
+      if (activeConnections.has(userId)) {
+        activeConnections.get(userId).delete(socket.id);
+        if (activeConnections.get(userId).size === 0) {
+          activeConnections.delete(userId);
+          shouldMarkOffline = true;
+        }
+      } else {
+        shouldMarkOffline = true;
+      }
+
+      if (shouldMarkOffline) {
+        try {
+          await db.query(
+            "UPDATE participant_status SET is_online = FALSE, last_active_at = CURRENT_TIMESTAMP WHERE participant_id = $1",
+            [userId]
+          );
+          // Broadcast offline status change to admin room
+          io.to('admin_room').emit('participant_status_changed', {
+            id: userId,
+            username: socket.user.username,
+            is_online: false
+          });
+        } catch (err) {
+          console.error('Error marking participant offline:', err);
+        }
       }
     }
   });

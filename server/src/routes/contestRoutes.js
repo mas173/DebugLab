@@ -6,6 +6,8 @@ import {
   updateContest,
   deleteContest,
   updateContestStatus,
+  addContestTime,
+  reduceContestTime,
 } from '../controllers/contestController.js';
 import { authenticate, requireAdmin } from '../middleware/authMiddleware.js';
 
@@ -20,5 +22,7 @@ router.post('/', requireAdmin, createContest);
 router.put('/:id', requireAdmin, updateContest);
 router.delete('/:id', requireAdmin, deleteContest);
 router.post('/:id/status', requireAdmin, updateContestStatus);
+router.post('/:id/add-time', requireAdmin, addContestTime);
+router.post('/:id/reduce-time', requireAdmin, reduceContestTime);
 
 export default router;
