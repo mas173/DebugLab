@@ -240,3 +240,50 @@ export async function addContestTime(req, res) {
     return res.status(500).json({ error: 'Internal server error adding contest time.' });
   }
 }
+
+// Reduce duration (in minutes) from an ongoing or paused contest (Admin only)
+export async function reduceContestTime(req, res) {
+  const { id } = req.params;
+  const { minutes } = req.body;
+
+  const reduceMinutes = parseInt(minutes, 10);
+  if (isNaN(reduceMinutes) || reduceMinutes <= 0) {
+    return res.status(400).json({ error: 'Valid positive minutes value is required.' });
+  }
+
+  try {
+    const check = await db.query('SELECT * FROM contests WHERE id = $1', [id]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Contest not found.' });
+    }
+
+    const currentContest = check.rows[0];
+    const newDuration = Math.max(1, (currentContest.duration_minutes || 60) - reduceMinutes);
+
+    const result = await db.query(
+      'UPDATE contests SET duration_minutes = $1 WHERE id = $2 RETURNING *',
+      [newDuration, id]
+    );
+
+    const updatedContest = result.rows[0];
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('contest_status_changed', {
+        contestId: updatedContest.id,
+        status: updatedContest.status,
+        startTime: updatedContest.start_time,
+        durationMinutes: updatedContest.duration_minutes,
+        elapsedSeconds: updatedContest.elapsed_seconds,
+      });
+    }
+
+    return res.json({
+      contest: updatedContest,
+      message: `Reduced ${reduceMinutes} minutes from contest duration.`
+    });
+  } catch (error) {
+    console.error('Error reducing contest time:', error);
+    return res.status(500).json({ error: 'Internal server error reducing contest time.' });
+  }
+}

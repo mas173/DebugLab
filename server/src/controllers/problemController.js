@@ -309,13 +309,19 @@ export async function getContestProblemsParticipant(req, res) {
       }
     }
 
-    // 3. Fetch ALL problems for the active contest
+    // 3. Fetch ALL problems for the active contest with participant's solved status
     const problemsResult = await db.query(
-      `SELECT id, title, description, starter_code, order_index, time_limit_ms, memory_limit_kb, points
-       FROM problems 
-       WHERE contest_id = $1
-       ORDER BY order_index ASC`,
-      [contestId]
+      `SELECT p.id, p.title, p.description, p.starter_code, p.order_index, p.time_limit_ms, p.memory_limit_kb, p.points,
+              EXISTS (
+                SELECT 1 FROM submissions s 
+                WHERE s.problem_id = p.id 
+                  AND s.participant_id = $1 
+                  AND s.status = 'accepted'
+              ) AS is_solved
+       FROM problems p
+       WHERE p.contest_id = $2
+       ORDER BY p.order_index ASC`,
+      [participantId, contestId]
     );
 
     return res.json({

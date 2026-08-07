@@ -274,6 +274,12 @@ export default function Dashboard() {
 
       if (status === 'accepted') {
         toast.success('Accepted! Problem Solved!');
+        setProblems((prevProblems) =>
+          prevProblems.map((p) =>
+            p.id === selectedProblem.id ? { ...p, is_solved: true } : p
+          )
+        );
+        setSelectedProblem((prev) => (prev ? { ...prev, is_solved: true } : prev));
         setConsoleLogs((prev) =>
           prev + `\n[VERDICT]: ACCEPTED (100% Correct)\n` +
           `- Test Cases Passed: ${sub.passed_test_cases}/${sub.total_test_cases}\n` +
@@ -663,16 +669,25 @@ export default function Dashboard() {
             <div className="flex flex-wrap gap-1.5">
               {problems.map((p) => {
                 const isSelected = selectedProblem?.id === p.id;
+                const isSolved = p.is_solved;
+
+                let buttonClass = 'bg-slate-900/60 border-slate-800 text-slate-300 hover:border-cyan-500/50 hover:text-white';
+                if (isSolved && isSelected) {
+                  buttonClass = 'bg-emerald-500/25 border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.35)] ring-1 ring-emerald-400/50';
+                } else if (isSolved) {
+                  buttonClass = 'bg-emerald-950/60 border-emerald-500/60 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.2)] hover:border-emerald-400 hover:text-emerald-300';
+                } else if (isSelected) {
+                  buttonClass = 'bg-cyan-500/20 border-cyan-500 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]';
+                }
+
                 return (
                   <button
                     key={p.id}
                     onClick={() => handleProblemSelect(p)}
-                    className={`flex-1 text-center py-2 px-2 text-xs font-bold font-mono rounded border transition ${isSelected
-                      ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
-                      : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:border-cyan-500/50 hover:text-white'
-                      }`}
+                    className={`flex-1 text-center py-2 px-2 text-xs font-bold font-mono rounded border transition flex items-center justify-center gap-1 ${buttonClass}`}
                   >
-                    P{p.order_index}
+                    <span>P{p.order_index}</span>
+                    {isSolved && <CheckCircle size={12} className="text-emerald-400 shrink-0" />}
                   </button>
                 );
               })}

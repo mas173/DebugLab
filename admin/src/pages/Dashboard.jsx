@@ -389,6 +389,19 @@ export default function Dashboard() {
     }
   };
 
+  const handleReduceContestTime = async (minutes) => {
+    if (!selectedContest) return;
+    try {
+      const res = await axios.post(`/api/contests/${selectedContest.id}/reduce-time`, { minutes });
+      setSelectedContest(res.data.contest);
+      setContests(prev => prev.map(c => c.id === res.data.contest.id ? res.data.contest : c));
+      toast.success(`Reduced ${minutes} minute(s) from contest timer!`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || 'Failed to reduce contest time.');
+    }
+  };
+
   // Create Contest
   const handleCreateContest = async (e) => {
     e.preventDefault();
@@ -964,61 +977,96 @@ export default function Dashboard() {
                   </button>
                 </div>
 
-                {/* ADD EXTRA TIME CONTROLS */}
-                <div className="mt-6 pt-6 border-t border-slate-900">
+                {/* ADJUST CONTEST DURATION CONTROLS */}
+                <div className="mt-6 pt-6 border-t border-slate-900 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
                       <h4 className="text-sm font-bold text-white mb-0.5 flex items-center gap-2">
-                        <Clock size={16} className="text-cyan-400" /> Add Extra Time
+                        <Clock size={16} className="text-cyan-400" /> Adjust Contest Duration
                       </h4>
-                      <p className="text-xs text-slate-400">Extend contest duration for ongoing or paused sessions in real-time.</p>
+                      <p className="text-xs text-slate-400">Add or reduce contest time for ongoing or paused sessions in real-time.</p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 font-mono">
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Mins"
+                        value={customAddMinutes}
+                        onChange={(e) => setCustomAddMinutes(e.target.value)}
+                        className="w-20 rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none font-mono"
+                      />
                       <button
-                        onClick={() => handleAddContestTime(5)}
-                        className="px-3.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500/50 hover:bg-cyan-500/10 text-xs font-bold text-cyan-400 transition"
+                        onClick={() => {
+                          const mins = parseInt(customAddMinutes, 10);
+                          if (mins > 0) {
+                            handleAddContestTime(mins);
+                            setCustomAddMinutes('');
+                          } else {
+                            toast.error('Enter valid positive minutes.');
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30 text-xs font-bold transition"
                       >
-                        + 5 Mins
+                        + Add
                       </button>
                       <button
-                        onClick={() => handleAddContestTime(10)}
-                        className="px-3.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500/50 hover:bg-cyan-500/10 text-xs font-bold text-cyan-400 transition"
+                        onClick={() => {
+                          const mins = parseInt(customAddMinutes, 10);
+                          if (mins > 0) {
+                            handleReduceContestTime(mins);
+                            setCustomAddMinutes('');
+                          } else {
+                            toast.error('Enter valid positive minutes.');
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-400 hover:bg-rose-500/30 text-xs font-bold transition"
                       >
-                        + 10 Mins
+                        - Reduce
                       </button>
-                      <button
-                        onClick={() => handleAddContestTime(15)}
-                        className="px-3.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500/50 hover:bg-cyan-500/10 text-xs font-bold text-cyan-400 transition"
-                      >
-                        + 15 Mins
-                      </button>
-
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="number"
-                          min="1"
-                          placeholder="Mins"
-                          value={customAddMinutes}
-                          onChange={(e) => setCustomAddMinutes(e.target.value)}
-                          className="w-20 rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none font-mono"
-                        />
-                        <button
-                          onClick={() => {
-                            const mins = parseInt(customAddMinutes, 10);
-                            if (mins > 0) {
-                              handleAddContestTime(mins);
-                              setCustomAddMinutes('');
-                            } else {
-                              toast.error('Enter valid positive minutes.');
-                            }
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 text-xs font-bold transition"
-                        >
-                          Add Custom
-                        </button>
-                      </div>
                     </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-900/60">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono mr-1">Quick Add:</span>
+                    <button
+                      onClick={() => handleAddContestTime(5)}
+                      className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500/50 hover:bg-cyan-500/10 text-xs font-bold text-cyan-400 transition"
+                    >
+                      + 5 Mins
+                    </button>
+                    <button
+                      onClick={() => handleAddContestTime(10)}
+                      className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500/50 hover:bg-cyan-500/10 text-xs font-bold text-cyan-400 transition"
+                    >
+                      + 10 Mins
+                    </button>
+                    <button
+                      onClick={() => handleAddContestTime(15)}
+                      className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500/50 hover:bg-cyan-500/10 text-xs font-bold text-cyan-400 transition"
+                    >
+                      + 15 Mins
+                    </button>
+
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono ml-4 mr-1">Quick Reduce:</span>
+                    <button
+                      onClick={() => handleReduceContestTime(5)}
+                      className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-rose-500/50 hover:bg-rose-500/10 text-xs font-bold text-rose-400 transition"
+                    >
+                      - 5 Mins
+                    </button>
+                    <button
+                      onClick={() => handleReduceContestTime(10)}
+                      className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-rose-500/50 hover:bg-rose-500/10 text-xs font-bold text-rose-400 transition"
+                    >
+                      - 10 Mins
+                    </button>
+                    <button
+                      onClick={() => handleReduceContestTime(15)}
+                      className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-rose-500/50 hover:bg-rose-500/10 text-xs font-bold text-rose-400 transition"
+                    >
+                      - 15 Mins
+                    </button>
                   </div>
                 </div>
               </div>
