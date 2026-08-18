@@ -813,7 +813,7 @@ export default function Dashboard() {
           >
             <Editor
               height="100%"
-              language="c"
+              language="plaintext"
               theme="vs-dark"
               value={editorCode}
               onChange={handleEditorChange}
@@ -825,6 +825,12 @@ export default function Dashboard() {
                 contextmenu: false,
                 dragAndDrop: false,
                 copyWithSyntaxHighlighting: false,
+                renderValidationDecorations: 'off',
+                matchBrackets: 'never',
+                'bracketPairColorization.enabled': false,
+                occurrencesHighlight: 'off',
+                selectionHighlight: false,
+                'semanticHighlighting.enabled': false,
                 scrollbar: {
                   vertical: 'visible',
                   horizontal: 'visible',
