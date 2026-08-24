@@ -8,8 +8,9 @@
 [![Vite](https://img.shields.io/badge/vite-8.x-purple.svg)](https://vitejs.dev/)
 [![Express](https://img.shields.io/badge/express-5.x-lightgrey.svg)](https://expressjs.com/)
 [![PostgreSQL](https://img.shields.io/badge/postgresql-14%2B-blue.svg)](https://www.postgresql.org/)
+[![Docker](https://img.shields.io/badge/docker-containerized-blue.svg)](https://www.docker.com/)
 
-DebugLab is an end-to-end, high-performance platform designed for hosting debugging challenges, algorithmic competitive programming contests, and fast-paced buzzer events. It features an integrated Monaco code editor, multi-language automated code judge execution, real-time Socket.IO timer and leaderboard updates, and granular admin controls.
+DebugLab is an end-to-end, high-performance platform designed for hosting debugging challenges, algorithmic competitive programming contests, and fast-paced buzzer events. It features an integrated Monaco code editor, multi-language automated code judge execution inside Docker containers, real-time Socket.IO timer and leaderboard updates, and granular admin controls.
 
 ---
 
@@ -29,7 +30,9 @@ DebugLab is an end-to-end, high-performance platform designed for hosting debugg
 
 ### ⚙ Backend & Judge Sandbox (`/server`)
 - **Multi-Language Judge Engine**: Automated compilation and test case execution for C, C++, Python, Java, and JavaScript.
-- **Security & Execution Isolation**: Safe process spawn timeouts, output truncations, and resource constraints to handle user code execution safely.
+- **Docker Container Sandboxing**: Isolated execution of user submissions inside lightweight Docker containers (`alpine`) with CPU/memory limits and non-root execution.
+- **Native Host Fallback**: Seamless fallback to host execution if Docker is unavailable, ensuring uninterrupted service.
+- **Bulk Participant Import**: CLI utility to rapidly import participant accounts from text files into PostgreSQL with single-pass password hashing and transaction rollback safety.
 - **PostgreSQL Relational Storage**: Optimized schema for high-concurrency submission logging, leaderboard recalculations, and contest tracking.
 - **Robust Auth & Security**: JWT-based session security, password hashing with bcrypt, Helmet headers, CORS policies, and rate-limiting middleware.
 
@@ -103,7 +106,8 @@ Make sure you have the following installed on your local development machine:
 - **Node.js**: `v18.0.0` or higher
 - **npm**: `v9.0.0` or higher
 - **PostgreSQL**: `v14` or higher
-- **Compilers / Runtimes** (for local code judge testing): `gcc`, `g++`, `python3`, `openjdk-17-jdk`, `node`
+- **Docker**: Docker Engine / Docker Desktop (Optional, for containerized sandbox execution via `alpine`)
+- **Compilers / Runtimes** (for native code judge testing fallback): `gcc`, `g++`, `python3`, `openjdk-17-jdk`, `node`
 
 ### 1. Clone the Repository
 ```bash
@@ -188,6 +192,63 @@ This starts:
 - 🟢 **Server**: `http://localhost:5000`
 - 🔵 **Client Portal**: `http://localhost:5173`
 - 🟡 **Admin Dashboard**: `http://localhost:5174`
+
+---
+
+## 🐳 Docker Code Sandbox Setup
+
+DebugLab uses Docker containers to run participant submissions in an isolated sandbox environment.
+
+### 1. Requirements & Image Setup
+Make sure **Docker Engine** / **Docker Desktop** is running on your machine, then pull the `alpine` image:
+
+```bash
+docker pull alpine
+```
+
+### 2. Sandbox Security Controls
+The judge service (`server/src/services/judgeService.js`) launches code inside Docker using strict flags:
+- **Memory Limit**: `--memory=256m` (Prevents memory exhaustion attacks)
+- **PID Limit**: `--pids-limit=64` (Prevents fork bombs)
+- **Privilege Control**: `--security-opt=no-new-privileges:true`
+- **Automatic Cleanup**: `--rm` (Instantly removes containers after execution)
+
+### 3. Graceful Fallback
+If Docker is not running or unavailable on the host machine, DebugLab automatically falls back to native host execution with a console warning.
+
+---
+
+## 👥 Bulk User Import Utility
+
+DebugLab includes a fast CLI script for batch creating participant user accounts (ideal for onboarding student groups or contest participants).
+
+### 1. Populate Username List
+Add target usernames (one per line) to `server/users.txt`:
+
+```txt
+USER-101
+USER-102
+USER-103
+```
+
+### 2. Run Bulk Import Command
+Execute the import script from either the root directory or the server directory:
+
+```bash
+# From root directory:
+npm run import-users
+
+# OR from server directory:
+cd server
+npm run import-users
+```
+
+### 3. Features & Safeguards
+- **Default Password**: Accounts are created with default password `user1234`.
+- **Performance Optimized**: Hashes the default password **once** using `bcrypt` to efficiently process hundreds of users without CPU delay.
+- **Transaction Safety**: Runs inside a single PostgreSQL database transaction (`BEGIN` / `COMMIT` / `ROLLBACK`). If any fatal error occurs, changes roll back completely.
+- **Duplicate Protection**: Automatically skips usernames that already exist in the database and outputs a summary.
+- **Status Initialization**: Automatically creates participant tracking records in `participant_status`.
 
 ---
 

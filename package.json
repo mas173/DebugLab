@@ -5,6 +5,7 @@
     "server": "npm --prefix server run dev",
     "client": "npm --prefix client run dev",
     "admin": "npm --prefix admin run dev",
+    "import-users": "npm --prefix server run import-users",
     "dev": "concurrently -n SERVER,CLIENT,ADMIN -c blue,green,yellow \"npm run server\" \"npm run client -- --expose\" \"npm run admin -- --expose\""
   },
   "devDependencies": {
