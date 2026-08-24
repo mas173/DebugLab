@@ -800,7 +800,22 @@ export default function Dashboard() {
               <Code2 size={14} className="text-cyan-400" />
               solution.c
             </span>
-            <span className="text-[10px] text-slate-500 font-mono tracking-wider">C (GCC)</span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  if (!selectedProblem) return;
+                  setEditorCode(selectedProblem.starter_code);
+                  triggerAutosave(selectedProblem.starter_code, selectedProblem.id);
+                  toast.success('Code reset to default.');
+                }}
+                disabled={!selectedProblem}
+                className="flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1 text-[10px] font-bold text-red-400 hover:text-red-300 transition disabled:opacity-40 disabled:pointer-events-none"
+              >
+                <RefreshCcw size={11} />
+                Reset Code
+              </button>
+              <span className="text-[10px] text-slate-500 font-mono tracking-wider">C (GCC)</span>
+            </div>
           </div>
 
           {/* Monaco Editor Container */}
@@ -813,7 +828,7 @@ export default function Dashboard() {
           >
             <Editor
               height="100%"
-              language="c"
+              language="plaintext"
               theme="vs-dark"
               value={editorCode}
               onChange={handleEditorChange}
@@ -825,6 +840,12 @@ export default function Dashboard() {
                 contextmenu: false,
                 dragAndDrop: false,
                 copyWithSyntaxHighlighting: false,
+                renderValidationDecorations: 'off',
+                matchBrackets: 'never',
+                'bracketPairColorization.enabled': false,
+                occurrencesHighlight: 'off',
+                selectionHighlight: false,
+                'semanticHighlighting.enabled': false,
                 scrollbar: {
                   vertical: 'visible',
                   horizontal: 'visible',
