@@ -52,6 +52,7 @@ export default function Dashboard() {
 
   // Leaderboard State
   const [leaderboardList, setLeaderboardList] = useState([]);
+  const [leaderboardProblems, setLeaderboardProblems] = useState([]);
   const selectedContestRef = useRef(selectedContest);
 
   useEffect(() => {
@@ -64,6 +65,7 @@ export default function Dashboard() {
       const url = currentContestId ? `/api/leaderboard?contestId=${currentContestId}` : '/api/leaderboard';
       const res = await axios.get(url);
       setLeaderboardList(res.data.leaderboard || []);
+      setLeaderboardProblems(res.data.problems || []);
     } catch (err) {
       console.error('Failed to load leaderboard:', err);
     }
@@ -202,13 +204,18 @@ export default function Dashboard() {
       return;
     }
 
-    const headers = ['Rank', 'Participant ID', 'Problems Solved', 'Total Score', 'Last Accepted Time'];
+    const problemHeaders = leaderboardProblems.map(p => `PS${p.order_index} Accepted`);
+    const headers = ['Rank', 'Participant ID', 'Problems Solved', 'Total Score', 'Last Accepted Time', ...problemHeaders];
     const rows = leaderboardList.map((lb) => [
       lb.rank,
       lb.username,
       lb.problems_solved,
       lb.score,
-      lb.last_accepted_time ? new Date(lb.last_accepted_time).toISOString() : '-'
+      lb.last_accepted_time ? new Date(lb.last_accepted_time).toISOString() : '-',
+      ...leaderboardProblems.map(p => {
+        const t = lb.problem_accepted_times?.[p.id];
+        return t ? new Date(t).toISOString() : '-';
+      })
     ]);
 
     const csvContent = [
@@ -1691,6 +1698,9 @@ export default function Dashboard() {
                         <th className="py-3 px-4 font-normal text-center">Problems Solved</th>
                         <th className="py-3 px-4 font-normal text-right">Total Score</th>
                         <th className="py-3 px-4 font-normal text-right">Last Accepted Time</th>
+                        {leaderboardProblems.map(p => (
+                          <th key={p.id} className="py-3 px-4 font-normal text-center" title={p.title}>PS{p.order_index}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-900">
@@ -1719,6 +1729,18 @@ export default function Dashboard() {
                                 : '-'
                               }
                             </td>
+                            {leaderboardProblems.map(p => {
+                              const t = row.problem_accepted_times?.[p.id];
+                              return (
+                                <td key={p.id} className="py-3.5 px-4 text-center font-mono text-xs">
+                                  {t ? (
+                                    <span className="text-emerald-400">{new Date(t).toLocaleTimeString()}</span>
+                                  ) : (
+                                    <span className="text-slate-700">—</span>
+                                  )}
+                                </td>
+                              );
+                            })}
                           </tr>
                         );
                       })}

@@ -17,8 +17,15 @@ export async function getLeaderboard(req, res) {
     }
 
     if (!targetContestId) {
-      return res.json({ leaderboard: [], contestId: null });
+      return res.json({ leaderboard: [], contestId: null, problems: [] });
     }
+
+    // Fetch problems for this contest (for dynamic column headers)
+    const problemsRes = await db.query(
+      'SELECT id, title, order_index FROM problems WHERE contest_id = $1 ORDER BY order_index ASC',
+      [targetContestId]
+    );
+    const contestProblems = problemsRes.rows;
 
     let queryText = `
       WITH distinct_solved AS (
@@ -59,14 +66,34 @@ export async function getLeaderboard(req, res) {
     `;
 
     const result = await db.query(queryText, queryParams);
-    
-    // Assign ranks based on calculated order
+
+    // Fetch per-problem accepted timestamps for all participants in this contest
+    const perProblemRes = await db.query(
+      `SELECT s.participant_id, s.problem_id, MIN(s.submitted_at) as accepted_at
+       FROM submissions s
+       JOIN problems p ON s.problem_id = p.id
+       WHERE s.status = 'accepted' AND p.contest_id = $1
+       GROUP BY s.participant_id, s.problem_id`,
+      [targetContestId]
+    );
+
+    // Build a map: participant_id -> { problem_id: accepted_at }
+    const perProblemMap = {};
+    for (const row of perProblemRes.rows) {
+      if (!perProblemMap[row.participant_id]) {
+        perProblemMap[row.participant_id] = {};
+      }
+      perProblemMap[row.participant_id][row.problem_id] = row.accepted_at;
+    }
+
+    // Assign ranks and attach per-problem timestamps
     const leaderboard = result.rows.map((row, index) => ({
       rank: index + 1,
-      ...row
+      ...row,
+      problem_accepted_times: perProblemMap[row.participant_id] || {}
     }));
 
-    return res.json({ leaderboard, contestId: targetContestId || null });
+    return res.json({ leaderboard, contestId: targetContestId || null, problems: contestProblems });
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
     return res.status(500).json({ error: 'Internal server error fetching leaderboard.' });
