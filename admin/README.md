@@ -1,16 +1,56 @@
-# React + Vite
+# DebugLab - Admin Dashboard 🛡
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The **Admin Dashboard** is the administrative command center for DebugLab. It equips instructors and contest organizers with real-time controls over contest durations, problem creation, test case uploading, complaint ticketing, participant account generation, and system health monitoring.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🛠 Tech Stack
 
-## React Compiler
+- **Framework**: React 19 + Vite 8
+- **UI Components & Icons**: Tailwind CSS + Lucide React
+- **Real-Time Control**: Socket.IO Client (`socket.io-client`)
+- **HTTP Client**: Axios
+- **Notifications**: React Hot Toast
+- **Routing**: React Router DOM 7
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## 📁 Folder Structure
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```
+admin/
+├── src/
+│   ├── components/      # Admin UI elements (Header, Sidebar, DurationModal)
+│   ├── context/         # AuthContext & SocketContext
+│   ├── pages/           # Admin Dashboard views (Dashboard, Problems, Complaints, Users)
+│   ├── App.jsx          # Protected routing for admin roles
+│   └── main.jsx         # Entry point
+├── .env.example         # Admin environment variables template
+└── package.json
+```
+
+---
+
+## ⚙ Setup & Environment Variables
+
+1. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Set backend API endpoint:
+   ```env
+   VITE_API_URL=http://localhost:5000
+   ```
+3. Start admin dashboard:
+   ```bash
+   npm run dev
+   ```
+
+---
+
+## 🔑 Administrative Capabilities
+
+- **Real-Time Duration Adjustment**: Live `+ Add` or `- Reduce` duration controls for active/paused contests without resetting state.
+- **Problem Set Builder**: Add problem statements, input/output specifications, time limits, memory limits, and sample/hidden test cases.
+- **Domain-Based User Management**: Filter, create, and manage `debug_users`, `buzzer_users`, and admin credentials. Bulk user CSV/JSON importer included.
+- **Complaint Ticket Management**: Review participant bug complaints, inspect submitted code logs, and transition ticket status.
