@@ -252,7 +252,7 @@ npm run import-users
 
 ---
 
-## 📡 API Overview
+## 📡 API Details
 
 | Endpoint | Method | Description | Auth Required |
 |---|---|---|---|
